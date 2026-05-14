@@ -10,12 +10,78 @@ const APP_PASSWORD  = process.env.APP_PASSWORD;
 const AUTH_ENABLED  = !!APP_PASSWORD;
 const COOKIE_SECRET = 'taquion_reporteria_2025';
 
-const BIMESTRES = [
-  { id: 'jun-jul',  sheet: 'JUNIO- JULIO',     label: 'Junio - Julio' },
-  { id: 'ago-sep',  sheet: 'AGOSTO- SEPT',     label: 'Agosto - Septiembre' },
-  { id: 'oct-nov',  sheet: 'OCTUBRE - NOV',    label: 'Octubre - Noviembre' },
-  { id: 'dic-ene',  sheet: 'DICIEMRE- ENERO',  label: 'Diciembre - Enero' },
-];
+// Los bimestres se descubren automáticamente leyendo la lista de hojas del Google
+// Sheet en runtime (función discoverBimestres). Si agregás, eliminás o renombrás
+// una hoja en la planilla, el panel se actualiza solo en la próxima carga (o al
+// apretar Actualizar para invalidar la cache).
+
+const MONTHS = {
+  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+  julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+  ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9,
+  sept: 9, oct: 10, nov: 11, dic: 12, diciem: 12,
+};
+
+function parseSheetMeta(sheetName) {
+  const tokens = sheetName.toLowerCase().match(/[a-záéíóúñ]+|\d{2,4}/gi) || [];
+  const monthIndices = [];
+  let year = null;
+  for (const t of tokens) {
+    const norm = t.replace(/[áéíóú]/g, c => ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c]));
+    if (MONTHS[norm] != null) monthIndices.push(MONTHS[norm]);
+    else if (/^\d{2,4}$/.test(t)) {
+      let n = parseInt(t, 10);
+      if (n < 100) n += 2000;
+      year = n;
+    }
+  }
+  if (monthIndices.length === 0) return null;
+  const startMonth = monthIndices[0];
+  const endMonth = monthIndices[monthIndices.length - 1];
+  const endYear = year != null ? year : new Date().getFullYear();
+  const startYear = endMonth < startMonth ? endYear - 1 : endYear;
+  return { startMonth, endMonth, startYear, endYear };
+}
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[áéíóú]/g, c => ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c]))
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+}
+
+function prettyLabel(sheetName) {
+  const fixed = sheetName.replace(/DICIEMRE/gi, 'Diciembre');
+  return fixed.toLowerCase()
+    .replace(/\s*-\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/(^|\s|-)([a-záéíóúñ])/g, (_, p, c) => p + c.toUpperCase())
+    .replace(/\b(\d{2})\b/g, (_, n) => `20${n}`);
+}
+
+async function discoverBimestres() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/htmlview`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`No se pudo listar hojas: ${r.status}`);
+  const html = await r.text();
+  const items = [];
+  const re = /items\.push\(\{name:\s*"([^"]+)"[\s\S]*?gid:\s*"(\d+)"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const name = m[1];
+    const gid = m[2];
+    const meta = parseSheetMeta(name);
+    if (!meta) continue;
+    items.push({
+      id: slugify(name),
+      sheet: name,
+      gid,
+      label: prettyLabel(name),
+      sortKey: meta.startYear * 100 + meta.startMonth,
+    });
+  }
+  items.sort((a, b) => a.sortKey - b.sortKey);
+  return items;
+}
 
 const COL_MAP = {
   herramienta:   0,
@@ -194,10 +260,10 @@ function parseBimestre(csvText) {
   return teams;
 }
 
-async function fetchSheet(sheetName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+async function fetchSheetByGid(gid) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}`;
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`Sheet "${sheetName}" returned ${r.status}`);
+  if (!r.ok) throw new Error(`Sheet gid=${gid} returned ${r.status}`);
   return r.text();
 }
 
@@ -211,17 +277,20 @@ app.get('/api/novedades', async (req, res) => {
     const now = Date.now();
     if (dataCache && now < cacheTTL) return res.json(dataCache);
 
-    const results = [];
-    for (const b of BIMESTRES) {
+    const bimestres = await discoverBimestres();
+    if (bimestres.length === 0) {
+      return res.json({ bimestres: [], fetchedAt: new Date().toISOString(), warning: 'No se detectaron hojas con nombres de bimestre en la planilla.' });
+    }
+
+    const results = await Promise.all(bimestres.map(async b => {
       try {
-        const csv = await fetchSheet(b.sheet);
-        const teams = parseBimestre(csv);
-        results.push({ id: b.id, label: b.label, sheet: b.sheet, teams });
+        const csv = await fetchSheetByGid(b.gid);
+        return { id: b.id, label: b.label, sheet: b.sheet, gid: b.gid, teams: parseBimestre(csv) };
       } catch (err) {
         console.error(`Error fetching ${b.sheet}:`, err.message);
-        results.push({ id: b.id, label: b.label, sheet: b.sheet, teams: [], error: err.message });
+        return { id: b.id, label: b.label, sheet: b.sheet, gid: b.gid, teams: [], error: err.message };
       }
-    }
+    }));
 
     const payload = { bimestres: results, fetchedAt: new Date().toISOString() };
     dataCache = payload;

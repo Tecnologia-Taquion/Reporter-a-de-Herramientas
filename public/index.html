@@ -164,6 +164,51 @@
     .risk-value{color:var(--text);word-break:break-word}
     .risk-value.muted{color:var(--text-empty);font-style:italic}
 
+    /* Tags */
+    .tags{display:inline-flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+    .tag{display:inline-block;padding:2px 10px;border-radius:50px;font-size:0.62rem;font-weight:800;letter-spacing:0.03em;text-transform:lowercase;line-height:1.5}
+    .tag-blue{background:#DBEAFE;color:#1E40AF}
+    .tag-green{background:#D1FAE5;color:#065F46}
+    .tag-amber{background:#FEF3C7;color:#92400E}
+    .tag-red{background:#FEE2E2;color:#991B1B}
+    .tag-dark{background:#1F2937;color:#F9FAFB}
+    html[data-theme="dark"] .tag-blue{background:#1E3A8A55;color:#BFDBFE}
+    html[data-theme="dark"] .tag-green{background:#064E3B55;color:#A7F3D0}
+    html[data-theme="dark"] .tag-amber{background:#92400E55;color:#FDE68A}
+    html[data-theme="dark"] .tag-red{background:#991B1B55;color:#FECACA}
+    html[data-theme="dark"] .tag-dark{background:#374151;color:#F9FAFB}
+
+    /* Clickable tool name */
+    .tool-row .tool-name.clickable{cursor:pointer}
+    .tool-row .tool-name.clickable:hover{text-decoration:underline}
+    .risk-tool.clickable{cursor:pointer}
+    .risk-tool.clickable:hover{text-decoration:underline}
+
+    /* History modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;backdrop-filter:blur(2px)}
+    .modal-backdrop.open{display:flex}
+    .modal-card{background:var(--surface);border-radius:20px;max-width:820px;width:100%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25)}
+    .modal-header{padding:22px 28px 16px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .modal-title-block{display:flex;flex-direction:column;gap:2px}
+    .modal-title{font-size:1.2rem;font-weight:800;color:var(--text-strong)}
+    .modal-subtitle{font-size:0.72rem;font-weight:700;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em}
+    .modal-close{width:36px;height:36px;background:transparent;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .2s}
+    .modal-close:hover{background:var(--btn-hover-bg);color:var(--text)}
+    .modal-body{padding:18px 28px 28px;overflow-y:auto}
+    .history-item{padding:18px 0;border-bottom:1px solid var(--border-soft)}
+    .history-item:last-child{border-bottom:none;padding-bottom:0}
+    .history-item.empty{opacity:.5}
+    .history-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+    .history-bimestre{font-size:0.95rem;font-weight:800;color:var(--text-strong)}
+    .history-empty-label{font-size:0.75rem;color:var(--text-empty);font-style:italic;font-weight:600}
+    .history-fields{display:flex;flex-direction:column;gap:8px;font-size:0.82rem}
+    .history-field{display:grid;grid-template-columns:160px 1fr;gap:14px;align-items:start}
+    .history-field-label{font-size:0.66rem;font-weight:800;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em;padding-top:3px}
+    .history-field-value{color:var(--text);word-break:break-word;line-height:1.45}
+    @media (max-width:680px){
+      .history-field{grid-template-columns:1fr;gap:2px}
+    }
+
     /* Footer info */
     .footer-info{margin-top:32px;text-align:center;font-size:0.72rem;color:var(--text-subtle);font-weight:600}
 
@@ -209,14 +254,62 @@
     <div class="footer-info" id="footerInfo"></div>
   </div>
 
+  <div class="modal-backdrop" id="historyModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title-block">
+          <span class="modal-subtitle">Historial</span>
+          <span class="modal-title" id="historyTitle">—</span>
+        </div>
+        <button class="modal-close" id="historyClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body" id="historyBody"></div>
+    </div>
+  </div>
+
 <script>
 let DATA = null;
 let activeBimestre = null;
 let searchTerm = '';
 let teamFilter = '';
 let responsableFilter = '';
+let tagFilter = '';
 let onlyNews = false;
 let viewMode = 'teams'; // 'teams' | 'risks'
+
+const TAG_DEFS = [
+  { id: 'politica',      label: 'política',      color: 'blue',  match: /pol[íi]tica|privacidad|t[ée]rminos|condiciones|legal|gdpr|consent|compliance/i },
+  { id: 'funcionalidad', label: 'funcionalidad', color: 'green', match: /funcionalidad|feature|nuev[oa]|lanza|release|integraci[óo]n|api|versi[óo]n|update|actualizaci[óo]n/i },
+  { id: 'precio',        label: 'precio',        color: 'amber', match: /precio|costo|tarifa|plan|billing|suscripci[óo]n|aumento|cobro|paga|upgrade|downgrade/i },
+  { id: 'deprecacion',   label: 'deprecación',   color: 'red',   match: /deprecat|discontinu|fin de vida|eol|sunset|cierra|de baja|reemplaza/i },
+  { id: 'incidente',     label: 'incidente',     color: 'dark',  match: /incidente|down|ca[íi]da|fallo|outage|breach|vulnerabilidad|brecha|hack|leak/i },
+];
+
+function classifyTool(tool) {
+  const text = [tool.queCambio, tool.nuevaPolitica, tool.deficiencia, tool.proximoPaso].filter(Boolean).join(' ');
+  if (!text.trim()) return [];
+  return TAG_DEFS.filter(def => def.match.test(text));
+}
+
+function normalizeToolName(name) {
+  return (name || '').trim().toLowerCase();
+}
+
+function getToolHistory(toolName) {
+  const target = normalizeToolName(toolName);
+  return DATA.bimestres.map(b => {
+    let foundTeam = null, foundTool = null;
+    (b.teams || []).forEach(team => {
+      team.tools.forEach(tool => {
+        if (normalizeToolName(tool.herramienta) === target) {
+          foundTeam = team.name;
+          foundTool = tool;
+        }
+      });
+    });
+    return { bimestre: b, team: foundTeam, tool: foundTool };
+  });
+}
 
 const HEADERS = [
   { key: 'herramienta',   label: 'Herramienta' },
@@ -268,6 +361,11 @@ function countNews(bimestre) {
   return n;
 }
 
+function toolMatchesTag(tool) {
+  if (!tagFilter) return true;
+  return classifyTool(tool).some(t => t.id === tagFilter);
+}
+
 function getFilteredTeams(bimestre) {
   const term = searchTerm.trim().toLowerCase();
   return (bimestre.teams || [])
@@ -276,6 +374,7 @@ function getFilteredTeams(bimestre) {
       const tools = team.tools.filter(tool => {
         if (onlyNews && !hasNews(tool)) return false;
         if (responsableFilter && tool.responsable !== responsableFilter) return false;
+        if (!toolMatchesTag(tool)) return false;
         if (term && !tool.herramienta.toLowerCase().includes(term)) return false;
         return true;
       });
@@ -293,6 +392,7 @@ function getRisks(bimestre) {
     team.tools.forEach(tool => {
       if (!tool.deficiencia) return;
       if (responsableFilter && tool.responsable !== responsableFilter) return;
+      if (!toolMatchesTag(tool)) return;
       if (term && !tool.herramienta.toLowerCase().includes(term)) return;
       risks.push({ team: team.name, ...tool });
     });
@@ -347,6 +447,7 @@ function render() {
       <div class="search"><input type="text" id="searchInput" placeholder="Buscar herramienta..." value="${escapeHTML(searchTerm)}"/></div>
       ${renderDropdown('teamDropdown', teamFilter, 'Todos los equipos', teamOptions)}
       ${renderDropdown('respDropdown', responsableFilter, 'Todos los responsables', respOptions)}
+      ${renderDropdown('tagDropdown', tagFilter ? (TAG_DEFS.find(t => t.id === tagFilter)?.label || '') : '', 'Todos los tipos', TAG_DEFS.map(t => t.label), TAG_DEFS.map(t => t.id))}
       ${viewMode === 'teams' ? `<button id="onlyNewsBtn" class="btn toggle ${onlyNews ? 'active' : ''}">Solo novedades</button>` : ''}
       <button id="exportBtn" class="btn">↓ Exportar</button>
     </div>`;
@@ -378,14 +479,20 @@ function render() {
   document.getElementById('footerInfo').textContent = `Datos actualizados: ${fetched}`;
 }
 
-function renderDropdown(id, selectedValue, placeholder, options) {
-  const label = selectedValue || placeholder;
+function renderDropdown(id, selectedLabel, placeholder, optionLabels, optionValues) {
+  // optionValues is optional — defaults to optionLabels (when label == value)
+  const values = optionValues || optionLabels;
+  const selected = selectedLabel || placeholder;
   const optionsHTML = [
-    `<div class="dropdown-option ${selectedValue === '' ? 'selected' : ''}" data-value="">${escapeHTML(placeholder)}</div>`,
-    ...options.map(o => `<div class="dropdown-option ${o === selectedValue ? 'selected' : ''}" data-value="${escapeHTML(o)}">${escapeHTML(o)}</div>`)
+    `<div class="dropdown-option ${selectedLabel === '' ? 'selected' : ''}" data-value="">${escapeHTML(placeholder)}</div>`,
+    ...optionLabels.map((label, i) => {
+      const v = values[i];
+      const isSelected = label === selectedLabel;
+      return `<div class="dropdown-option ${isSelected ? 'selected' : ''}" data-value="${escapeHTML(v)}">${escapeHTML(label)}</div>`;
+    })
   ].join('');
   return `<div class="dropdown" id="${id}">
-    <button type="button" class="dropdown-trigger" title="${escapeHTML(label)}">${escapeHTML(label)}</button>
+    <button type="button" class="dropdown-trigger" title="${escapeHTML(selected)}">${escapeHTML(selected)}</button>
     <div class="dropdown-panel">${optionsHTML}</div>
   </div>`;
 }
@@ -435,11 +542,73 @@ function wireUpEvents() {
   }
   wireDropdown('teamDropdown', v => { teamFilter = v; render(); });
   wireDropdown('respDropdown', v => { responsableFilter = v; render(); });
+  wireDropdown('tagDropdown', v => { tagFilter = v; render(); });
   const onlyNewsBtn = document.getElementById('onlyNewsBtn');
   if (onlyNewsBtn) onlyNewsBtn.addEventListener('click', () => { onlyNews = !onlyNews; render(); });
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) exportBtn.addEventListener('click', exportMarkdown);
+  document.querySelectorAll('[data-tool]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openHistoryModal(el.dataset.tool);
+    });
+  });
 }
+
+function openHistoryModal(toolName) {
+  const history = getToolHistory(toolName);
+  document.getElementById('historyTitle').textContent = toolName;
+  const FIELD_LABELS = [
+    { key: 'queCambio',     label: 'Qué cambió' },
+    { key: 'nuevaPolitica', label: 'Nueva política / actualización' },
+    { key: 'deficiencia',   label: 'Deficiencia / riesgo' },
+    { key: 'responsable',   label: 'Responsable' },
+    { key: 'proximoPaso',   label: 'Próximo paso' },
+  ];
+  const itemsHTML = history.map(h => {
+    if (!h.tool) {
+      return `<div class="history-item empty">
+        <div class="history-head">
+          <span class="history-bimestre">${escapeHTML(h.bimestre.label)}</span>
+          <span class="history-empty-label">no aparece en este bimestre</span>
+        </div>
+      </div>`;
+    }
+    const news = hasNews(h.tool);
+    const tags = classifyTool(h.tool);
+    const tagsHTML = tags.length
+      ? `<div class="tags" style="margin-top:0">${tags.map(t => `<span class="tag tag-${t.color}">${t.label}</span>`).join('')}</div>`
+      : '';
+    const fields = news
+      ? FIELD_LABELS.filter(f => h.tool[f.key]).map(f => `
+          <div class="history-field">
+            <span class="history-field-label">${f.label}</span>
+            <span class="history-field-value">${escapeHTML(h.tool[f.key])}</span>
+          </div>`).join('')
+      : '<span class="history-empty-label">sin novedades cargadas</span>';
+    return `<div class="history-item ${news ? '' : 'empty'}">
+      <div class="history-head">
+        <span class="history-bimestre">${escapeHTML(h.bimestre.label)}${h.team ? ` <span class="risk-team">· ${escapeHTML(h.team)}</span>` : ''}</span>
+        ${tagsHTML}
+      </div>
+      <div class="history-fields">${fields}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('historyBody').innerHTML = itemsHTML;
+  document.getElementById('historyModal').classList.add('open');
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('open');
+}
+
+document.getElementById('historyClose').addEventListener('click', closeHistoryModal);
+document.getElementById('historyModal').addEventListener('click', e => {
+  if (e.target.id === 'historyModal') closeHistoryModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeHistoryModal();
+});
 
 function renderRisk(risk) {
   const field = (label, value) => `
@@ -447,11 +616,16 @@ function renderRisk(risk) {
       <span class="risk-label">${label}</span>
       <span class="risk-value ${value ? '' : 'muted'}">${value ? escapeHTML(value) : '—'}</span>
     </div>`;
+  const tags = classifyTool(risk);
+  const tagsHTML = tags.length
+    ? `<div class="tags" style="margin-top:0">${tags.map(t => `<span class="tag tag-${t.color}">${t.label}</span>`).join('')}</div>`
+    : '';
   return `<div class="risk-card">
     <div class="risk-head">
-      <span class="risk-tool">${escapeHTML(risk.herramienta)}</span>
+      <span class="risk-tool clickable" data-tool="${escapeHTML(risk.herramienta)}">${escapeHTML(risk.herramienta)}</span>
       <span class="risk-team">${escapeHTML(risk.team)}</span>
     </div>
+    ${tagsHTML ? `<div style="margin-bottom:10px">${tagsHTML}</div>` : ''}
     <div class="risk-body">
       ${field('Deficiencia / riesgo', risk.deficiencia)}
       ${field('Próximo paso', risk.proximoPaso)}
@@ -534,12 +708,18 @@ function renderTeam(team) {
   const rows = team.tools.length
     ? team.tools.map(tool => {
         const has = hasNews(tool);
+        const tags = classifyTool(tool);
         return `<div class="tool-row ${has ? 'has-data' : 'empty'}">
           ${HEADERS.map(h => {
+            if (h.key === 'herramienta') {
+              const tagsHTML = tags.length
+                ? `<div class="tags">${tags.map(t => `<span class="tag tag-${t.color}">${t.label}</span>`).join('')}</div>`
+                : '';
+              return `<div class="cell tool-name clickable" data-label="${h.label}" data-tool="${escapeHTML(tool.herramienta)}">${escapeHTML(tool.herramienta)}${tagsHTML}</div>`;
+            }
             const v = tool[h.key];
             const display = v ? escapeHTML(v) : `<span class="cell-empty">—</span>`;
-            const cls = h.key === 'herramienta' ? 'cell tool-name' : 'cell';
-            return `<div class="${cls}" data-label="${h.label}">${display}</div>`;
+            return `<div class="cell" data-label="${h.label}">${display}</div>`;
           }).join('')}
         </div>`;
       }).join('')
