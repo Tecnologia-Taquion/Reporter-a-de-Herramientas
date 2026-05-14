@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Reportería de Herramientas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Nunito',sans-serif;background:#FDFCF0;color:#374151;min-height:100vh;padding:32px 24px 64px}
+    .container{max-width:1200px;margin:0 auto}
+
+    /* Header */
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;gap:16px;flex-wrap:wrap}
+    .title-block{display:flex;align-items:center;gap:14px}
+    .title-icon{width:48px;height:48px;background:linear-gradient(135deg,#E3F2FD,#F3E5F5);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+    h1{font-size:1.45rem;font-weight:800;color:#374151}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{padding:9px 18px;background:#fff;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.78rem;font-weight:700;color:#374151;cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .btn:hover{border-color:#C4B5FD;background:#FAFAFA}
+    .btn.primary{background:#374151;color:#fff;border-color:#374151}
+    .btn.primary:hover{background:#1F2937;border-color:#1F2937}
+
+    /* Tabs */
+    .tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
+    .tab{padding:10px 20px;background:#fff;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.82rem;font-weight:700;color:#6B7280;cursor:pointer;transition:all .2s}
+    .tab:hover{border-color:#C4B5FD}
+    .tab.active{background:#374151;color:#fff;border-color:#374151}
+    .tab .empty-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#D1D5DB;margin-left:6px;vertical-align:middle}
+    .tab .filled-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#10B981;margin-left:6px;vertical-align:middle}
+
+    /* Summary bar */
+    .summary{background:#fff;border-radius:16px;padding:16px 22px;margin-bottom:24px;display:flex;gap:28px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+    .summary-item{display:flex;flex-direction:column;gap:2px}
+    .summary-label{font-size:0.7rem;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.04em}
+    .summary-value{font-size:1.05rem;font-weight:800;color:#374151}
+
+    /* Team cards */
+    .teams{display:flex;flex-direction:column;gap:18px}
+    .team{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.05)}
+    .team-header{padding:16px 22px;background:linear-gradient(135deg,#E3F2FD,#F3E5F5);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+    .team-name{font-size:0.95rem;font-weight:800;color:#374151;letter-spacing:0.02em}
+    .team-meta{display:flex;gap:10px;align-items:center}
+    .badge{padding:4px 12px;background:#fff;border-radius:50px;font-size:0.7rem;font-weight:700;color:#6B7280}
+    .badge.has-news{background:#D1FAE5;color:#065F46}
+    .chevron{transition:transform .2s;font-size:0.9rem;color:#6B7280}
+    .team.collapsed .chevron{transform:rotate(-90deg)}
+    .team.collapsed .team-body{display:none}
+
+    /* Tools table */
+    .team-body{padding:0}
+    .tool-row{display:grid;grid-template-columns:1.1fr 1.5fr 1.5fr 1.5fr 1fr 1.5fr;border-top:1px solid #F3F4F6;font-size:0.82rem}
+    .tool-row.head{background:#FAFAFA;font-weight:700;color:#9CA3AF;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em}
+    .tool-row .cell{padding:12px 16px;border-right:1px solid #F3F4F6;word-break:break-word}
+    .tool-row .cell:last-child{border-right:none}
+    .tool-row.empty{color:#D1D5DB;font-style:italic}
+    .tool-row .tool-name{font-weight:700;color:#374151}
+    .tool-row.has-data .tool-name{color:#1F2937}
+    .tool-row.has-data{background:#FFFEFB}
+    .cell-empty{color:#D1D5DB;font-size:0.78rem}
+
+    /* Empty state */
+    .empty-state{background:#fff;border-radius:18px;padding:48px 24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.05)}
+    .empty-state .icon{font-size:2.5rem;margin-bottom:12px}
+    .empty-state h2{font-size:1rem;font-weight:800;color:#374151;margin-bottom:6px}
+    .empty-state p{font-size:0.85rem;color:#9CA3AF}
+
+    /* Loading */
+    .loading{text-align:center;padding:60px 20px;color:#9CA3AF;font-size:0.9rem;font-weight:600}
+    .spinner{display:inline-block;width:32px;height:32px;border:3px solid #E5E7EB;border-top-color:#C4B5FD;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Footer info */
+    .footer-info{margin-top:32px;text-align:center;font-size:0.72rem;color:#9CA3AF;font-weight:600}
+
+    /* Mobile */
+    @media (max-width: 860px){
+      body{padding:20px 12px 48px}
+      .tool-row{grid-template-columns:1fr;font-size:0.85rem}
+      .tool-row .cell{border-right:none;border-bottom:1px solid #F3F4F6;padding:10px 14px}
+      .tool-row.head{display:none}
+      .tool-row .cell::before{content:attr(data-label);display:block;font-size:0.65rem;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
+      .tool-row{padding:6px 0}
+      h1{font-size:1.2rem}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-block">
+        <div class="title-icon">📋</div>
+        <h1>Reportería de Herramientas</h1>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="btn">↻ Actualizar</button>
+        <a href="/logout" class="btn">Salir</a>
+      </div>
+    </div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Cargando novedades...</div>
+      </div>
+    </div>
+
+    <div class="footer-info" id="footerInfo"></div>
+  </div>
+
+<script>
+let DATA = null;
+let activeBimestre = null;
+
+const HEADERS = [
+  { key: 'herramienta',   label: 'Herramienta' },
+  { key: 'queCambio',     label: 'Qué cambió' },
+  { key: 'nuevaPolitica', label: 'Nueva política / actualización' },
+  { key: 'deficiencia',   label: 'Deficiencia / riesgo' },
+  { key: 'responsable',   label: 'Responsable' },
+  { key: 'proximoPaso',   label: 'Próximo paso' },
+];
+
+async function load(refresh = false) {
+  if (refresh) {
+    await fetch('/api/refresh', { method: 'POST' });
+  }
+  document.getElementById('content').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Cargando novedades...</div>
+    </div>`;
+  try {
+    const r = await fetch('/api/novedades');
+    if (!r.ok) throw new Error('Error al cargar');
+    DATA = await r.json();
+    // Pick most recent bimestre with data, fallback to last
+    if (!activeBimestre) {
+      const withData = DATA.bimestres.filter(b => hasAnyNews(b));
+      activeBimestre = (withData.length ? withData[withData.length - 1] : DATA.bimestres[0])?.id;
+    }
+    render();
+  } catch (err) {
+    document.getElementById('content').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">⚠️</div>
+        <h2>No se pudo cargar la información</h2>
+        <p>${err.message}</p>
+      </div>`;
+  }
+}
+
+function hasNews(tool) {
+  return !!(tool.queCambio || tool.nuevaPolitica || tool.deficiencia || tool.responsable || tool.proximoPaso);
+}
+function hasAnyNews(bimestre) {
+  return (bimestre.teams || []).some(t => (t.tools || []).some(hasNews));
+}
+function countNews(bimestre) {
+  let n = 0;
+  (bimestre.teams || []).forEach(t => (t.tools || []).forEach(tool => { if (hasNews(tool)) n++; }));
+  return n;
+}
+
+function render() {
+  const bimestre = DATA.bimestres.find(b => b.id === activeBimestre) || DATA.bimestres[0];
+
+  const tabsHTML = DATA.bimestres.map(b => {
+    const filled = hasAnyNews(b);
+    return `<button class="tab ${b.id === activeBimestre ? 'active' : ''}" data-id="${b.id}">
+      ${b.label}<span class="${filled ? 'filled-dot' : 'empty-dot'}"></span>
+    </button>`;
+  }).join('');
+
+  const totalTools = (bimestre.teams || []).reduce((s, t) => s + (t.tools || []).length, 0);
+  const totalNews  = countNews(bimestre);
+  const totalTeams = (bimestre.teams || []).length;
+
+  const summaryHTML = `
+    <div class="summary">
+      <div class="summary-item"><span class="summary-label">Bimestre</span><span class="summary-value">${bimestre.label}</span></div>
+      <div class="summary-item"><span class="summary-label">Equipos</span><span class="summary-value">${totalTeams}</span></div>
+      <div class="summary-item"><span class="summary-label">Herramientas</span><span class="summary-value">${totalTools}</span></div>
+      <div class="summary-item"><span class="summary-label">Con novedades</span><span class="summary-value">${totalNews}</span></div>
+    </div>`;
+
+  let teamsHTML;
+  if (bimestre.error) {
+    teamsHTML = `<div class="empty-state"><div class="icon">⚠️</div><h2>Error cargando esta hoja</h2><p>${bimestre.error}</p></div>`;
+  } else if (!bimestre.teams || bimestre.teams.length === 0) {
+    teamsHTML = `<div class="empty-state"><div class="icon">📭</div><h2>Sin datos</h2><p>No se encontraron equipos en este bimestre.</p></div>`;
+  } else {
+    teamsHTML = `<div class="teams">${bimestre.teams.map(renderTeam).join('')}</div>`;
+  }
+
+  document.getElementById('content').innerHTML = tabsHTML.length
+    ? `<div class="tabs">${tabsHTML}</div>${summaryHTML}${teamsHTML}`
+    : teamsHTML;
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => { activeBimestre = t.dataset.id; render(); });
+  });
+  document.querySelectorAll('.team-header').forEach(h => {
+    h.addEventListener('click', () => h.parentElement.classList.toggle('collapsed'));
+  });
+
+  const fetched = DATA.fetchedAt ? new Date(DATA.fetchedAt).toLocaleString('es-AR') : '—';
+  document.getElementById('footerInfo').textContent = `Datos actualizados: ${fetched}`;
+}
+
+function renderTeam(team) {
+  const toolsWithNews = team.tools.filter(hasNews).length;
+  const collapsedClass = toolsWithNews === 0 ? 'collapsed' : '';
+  const badge = toolsWithNews > 0
+    ? `<span class="badge has-news">${toolsWithNews} con novedades</span>`
+    : `<span class="badge">sin novedades</span>`;
+
+  const headRow = `<div class="tool-row head">
+    ${HEADERS.map(h => `<div class="cell">${h.label}</div>`).join('')}
+  </div>`;
+
+  const rows = team.tools.length
+    ? team.tools.map(tool => {
+        const has = hasNews(tool);
+        return `<div class="tool-row ${has ? 'has-data' : 'empty'}">
+          ${HEADERS.map(h => {
+            const v = tool[h.key];
+            const display = v ? escapeHTML(v) : `<span class="cell-empty">—</span>`;
+            const cls = h.key === 'herramienta' ? 'cell tool-name' : 'cell';
+            return `<div class="${cls}" data-label="${h.label}">${display}</div>`;
+          }).join('')}
+        </div>`;
+      }).join('')
+    : `<div class="tool-row empty"><div class="cell" style="grid-column:1/-1;text-align:center">Sin herramientas listadas</div></div>`;
+
+  return `<div class="team ${collapsedClass}">
+    <div class="team-header">
+      <span class="team-name">${escapeHTML(team.name)}</span>
+      <div class="team-meta">
+        ${badge}
+        <span class="badge">${team.tools.length} herramientas</span>
+        <span class="chevron">▼</span>
+      </div>
+    </div>
+    <div class="team-body">
+      ${headRow}
+      ${rows}
+    </div>
+  </div>`;
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('refreshBtn').addEventListener('click', () => load(true));
+load();
+</script>
+</body>
+</html>
