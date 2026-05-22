@@ -5,7 +5,9 @@ const crypto = require('crypto');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const SHEET_ID      = '116pmPoOiZ5CVwTYRYHpBUaV1FcdLw8KH';
+// Publish ID del Google Sheet (URL "Publicar en la web" → "...spreadsheets/d/e/{PUBLISH_ID}/pubhtml")
+// Usamos el publish ID en vez del spreadsheet ID porque la planilla está publicada como página web.
+const PUBLISH_ID    = '2PACX-1vT7bY2KlZaI1sZB7jbJ9z4uCqPRrw4Qboxt-n1hxGUQtBQV83gt00geZiqsZv3zRdPaG1Z5haMc-dEX';
 const APP_PASSWORD  = process.env.APP_PASSWORD;
 const AUTH_ENABLED  = !!APP_PASSWORD;
 const COOKIE_SECRET = 'taquion_reporteria_2025';
@@ -59,7 +61,7 @@ function prettyLabel(sheetName) {
 }
 
 async function discoverBimestres() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/htmlview`;
+  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISH_ID}/pubhtml`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`No se pudo listar hojas: ${r.status}`);
   const html = await r.text();
@@ -261,7 +263,7 @@ function parseBimestre(csvText) {
 }
 
 async function fetchSheetByGid(gid) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}`;
+  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISH_ID}/pub?output=csv&single=true&gid=${encodeURIComponent(gid)}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Sheet gid=${gid} returned ${r.status}`);
   return r.text();
