@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👥</text></svg>"/>
+  <title>Líderes — Reportería de Herramientas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#FDFCF0;
+      --surface:#ffffff;
+      --surface-alt:#FAFAFA;
+      --text:#374151;
+      --text-strong:#1F2937;
+      --text-muted:#6B7280;
+      --text-subtle:#9CA3AF;
+      --text-empty:#D1D5DB;
+      --border:#E5E7EB;
+      --border-soft:#F3F4F6;
+      --accent:#C4B5FD;
+      --green:#10B981;
+      --red:#DC2626;
+      --amber:#F59E0B;
+      --shadow-card:0 2px 12px rgba(0,0,0,0.05);
+      --shadow-soft:0 2px 8px rgba(0,0,0,0.04);
+      --btn-bg:#ffffff;
+      --btn-hover-bg:#FAFAFA;
+      --btn-primary-bg:#374151;
+      --btn-primary-text:#ffffff;
+      --header-gradient:linear-gradient(135deg,#E3F2FD,#F3E5F5);
+    }
+    html[data-theme="dark"]{
+      --bg:#0F172A;
+      --surface:#1E293B;
+      --surface-alt:#162032;
+      --text:#E5E7EB;
+      --text-strong:#F9FAFB;
+      --text-muted:#9CA3AF;
+      --text-subtle:#6B7280;
+      --text-empty:#4B5563;
+      --border:#334155;
+      --border-soft:#243047;
+      --accent:#8B5CF6;
+      --shadow-card:0 2px 12px rgba(0,0,0,0.35);
+      --shadow-soft:0 2px 8px rgba(0,0,0,0.25);
+      --btn-bg:#1E293B;
+      --btn-hover-bg:#243047;
+      --btn-primary-bg:#8B5CF6;
+      --header-gradient:linear-gradient(135deg,#1E3A8A33,#6B21A833);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:32px 24px 64px;transition:background .2s,color .2s}
+    .container{max-width:1100px;margin:0 auto}
+
+    /* Header */
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap}
+    .title-block{display:flex;align-items:center;gap:14px}
+    .title-icon{width:48px;height:48px;background:var(--header-gradient);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+    h1{font-size:1.35rem;font-weight:800;color:var(--text)}
+    .team-pill{font-size:0.72rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;display:block}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{padding:9px 18px;background:var(--btn-bg);border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.78rem;font-weight:700;color:var(--text);cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .btn:hover{border-color:var(--accent);background:var(--btn-hover-bg)}
+    .btn.icon-only{padding:9px 12px;font-size:0.95rem;line-height:1}
+    .btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
+    .btn.primary:hover{background:var(--text-strong);border-color:var(--text-strong)}
+    .btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+    .btn.green:hover{background:#0d8e6a;border-color:#0d8e6a}
+    .btn.red{background:#fff;color:var(--red);border-color:#FCA5A5}
+    .btn.red:hover{background:#FEF2F2}
+    html[data-theme="dark"] .btn.red{background:#1E293B;color:#FCA5A5;border-color:#7F1D1D}
+
+    /* Tabs */
+    .tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+    .tab{padding:10px 20px;background:var(--surface);border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.82rem;font-weight:700;color:var(--text-muted);cursor:pointer;transition:all .2s}
+    .tab:hover{border-color:var(--accent)}
+    .tab.active{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
+    .tab .count{display:inline-block;background:rgba(255,255,255,0.25);padding:1px 8px;border-radius:50px;font-size:0.7rem;margin-left:6px}
+    .tab:not(.active) .count{background:var(--border)}
+
+    /* Summary */
+    .summary{background:var(--surface);border-radius:16px;padding:16px 22px;margin-bottom:20px;display:flex;gap:28px;flex-wrap:wrap;box-shadow:var(--shadow-soft)}
+    .summary-item{display:flex;flex-direction:column;gap:2px}
+    .summary-label{font-size:0.7rem;font-weight:700;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em}
+    .summary-value{font-size:1.05rem;font-weight:800;color:var(--text)}
+
+    /* Controls */
+    .controls{background:var(--surface);border-radius:16px;padding:14px 18px;margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;box-shadow:var(--shadow-soft)}
+    .controls .search{flex:1 1 220px;min-width:180px;position:relative}
+    .controls .search input{width:100%;padding:9px 16px 9px 36px;border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s}
+    .controls .search input:focus{border-color:var(--accent)}
+    .controls .search::before{content:"🔍";position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:0.8rem;opacity:.6;pointer-events:none}
+
+    /* Suggestion cards */
+    .cards{display:flex;flex-direction:column;gap:14px}
+    .card{background:var(--surface);border-radius:18px;padding:20px 24px;box-shadow:var(--shadow-card);border-left:4px solid transparent}
+    .card.relevancia-alta{border-left-color:var(--green)}
+    .card.relevancia-media{border-left-color:var(--amber)}
+    .card.relevancia-baja{border-left-color:var(--text-empty)}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+    .card-tool{font-size:1.05rem;font-weight:800;color:var(--text-strong)}
+    .card-title{font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-top:2px}
+    .card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .chip{font-size:0.65rem;font-weight:800;padding:3px 10px;border-radius:50px;text-transform:uppercase;letter-spacing:0.03em;line-height:1.5}
+    .chip-alta{background:#D1FAE5;color:#065F46}
+    .chip-media{background:#FEF3C7;color:#92400E}
+    .chip-baja{background:#F3F4F6;color:#6B7280}
+    html[data-theme="dark"] .chip-alta{background:#064E3B55;color:#A7F3D0}
+    html[data-theme="dark"] .chip-media{background:#92400E55;color:#FDE68A}
+    html[data-theme="dark"] .chip-baja{background:#37415155;color:#9CA3AF}
+    .card-body{display:flex;flex-direction:column;gap:10px;font-size:0.85rem;line-height:1.5;margin-bottom:14px}
+    .card-row{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:start}
+    .card-label{font-size:0.65rem;font-weight:800;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em;padding-top:3px}
+    .card-value{color:var(--text);word-break:break-word}
+    .card-value a{color:var(--accent);text-decoration:none}
+    .card-value a:hover{text-decoration:underline}
+    .card-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border-soft);padding-top:14px}
+
+    /* My decisions */
+    .decision-card{background:var(--surface);border-radius:18px;padding:18px 22px;box-shadow:var(--shadow-card);border-left:4px solid var(--green)}
+    .decision-card.rejected{border-left-color:var(--text-empty);opacity:.75}
+    .decision-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .decision-tool{font-size:0.95rem;font-weight:800;color:var(--text-strong)}
+    .decision-meta{font-size:0.72rem;font-weight:700;color:var(--text-subtle)}
+    .decision-status{font-size:0.65rem;font-weight:800;padding:3px 10px;border-radius:50px;text-transform:uppercase;letter-spacing:0.03em}
+    .decision-status.approved{background:#D1FAE5;color:#065F46}
+    .decision-status.rejected{background:#FEE2E2;color:#991B1B}
+    html[data-theme="dark"] .decision-status.approved{background:#064E3B55;color:#A7F3D0}
+    html[data-theme="dark"] .decision-status.rejected{background:#7F1D1D55;color:#FECACA}
+
+    /* Empty state */
+    .empty-state{background:var(--surface);border-radius:18px;padding:48px 24px;text-align:center;box-shadow:var(--shadow-card)}
+    .empty-state .icon{font-size:2.5rem;margin-bottom:12px}
+    .empty-state h2{font-size:1rem;font-weight:800;color:var(--text);margin-bottom:6px}
+    .empty-state p{font-size:0.85rem;color:var(--text-subtle)}
+
+    /* Loading */
+    .loading{text-align:center;padding:60px 20px;color:var(--text-subtle);font-size:0.9rem;font-weight:600}
+    .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:32px 20px;overflow-y:auto;backdrop-filter:blur(2px)}
+    .modal-backdrop.open{display:flex}
+    .modal-card{background:var(--surface);border-radius:20px;max-width:680px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;margin:auto}
+    .modal-header{padding:22px 28px 16px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .modal-title{font-size:1.15rem;font-weight:800;color:var(--text-strong)}
+    .modal-subtitle{font-size:0.7rem;font-weight:800;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:2px}
+    .modal-close{width:36px;height:36px;background:transparent;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .2s}
+    .modal-close:hover{background:var(--btn-hover-bg);color:var(--text)}
+    .modal-body{padding:18px 28px 24px;display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto}
+    .field{display:flex;flex-direction:column;gap:5px}
+    .field label{font-size:0.7rem;font-weight:800;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em}
+    .field input, .field select, .field textarea{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:14px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;resize:vertical;min-height:38px}
+    .field select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer;padding-right:36px}
+    .field textarea{min-height:70px;border-radius:18px}
+    .field input:focus, .field select:focus, .field textarea:focus{border-color:var(--accent)}
+    .modal-footer{padding:16px 28px 22px;border-top:1px solid var(--border-soft);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+    /* Toast */
+    .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--text-strong);color:var(--btn-primary-text);padding:12px 24px;border-radius:50px;font-size:0.85rem;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,0.25);opacity:0;transition:transform .3s,opacity .3s;z-index:200}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+    .toast.error{background:#DC2626;color:#fff}
+
+    /* Footer */
+    .footer-info{margin-top:32px;text-align:center;font-size:0.72rem;color:var(--text-subtle);font-weight:600}
+
+    @media (max-width: 700px){
+      body{padding:20px 12px 48px}
+      .card-row{grid-template-columns:1fr;gap:2px}
+      .card-actions{justify-content:stretch}
+      .card-actions .btn{flex:1;justify-content:center}
+    }
+  </style>
+  <script>
+    (function(){
+      const saved = localStorage.getItem('theme');
+      document.documentElement.setAttribute('data-theme', saved || 'light');
+    })();
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-block">
+        <div class="title-icon">👥</div>
+        <div>
+          <h1>Panel de Líderes</h1>
+          <span class="team-pill" id="teamPill">Equipo: —</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="btn">↻ Actualizar</button>
+        <button id="themeBtn" class="btn icon-only" title="Cambiar tema" aria-label="Cambiar tema">🌙</button>
+        <a href="/lideres/logout" class="btn">Salir</a>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="pendientes">Sugerencias pendientes<span class="count" id="countPendientes">·</span></button>
+      <button class="tab" data-tab="mias">Mis decisiones<span class="count" id="countMias">·</span></button>
+    </div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Cargando…</div>
+      </div>
+    </div>
+
+    <div class="footer-info" id="footerInfo"></div>
+  </div>
+
+  <div class="modal-backdrop" id="editModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <span class="modal-subtitle" id="modalSubtitle">Sugerencia</span>
+          <span class="modal-title" id="modalTitle">—</span>
+        </div>
+        <button class="modal-close" id="modalClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer">
+        <button id="modalCancel" class="btn">Cancelar</button>
+        <button id="modalApprove" class="btn green">✓ Aprobar y enviar al Sheet</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+let STATE = {
+  team: null,
+  pendientes: [],
+  bimestres: [],
+  decisiones: [],
+  activeTab: 'pendientes',
+  search: '',
+  loaded: { pendientes: false, mias: false },
+};
+let MODAL = { suggestion: null };
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+async function loadPendientes() {
+  const r = await fetch('/api/lideres/sugerencias');
+  if (r.status === 401) { window.location.href = '/lideres/login'; return; }
+  if (!r.ok) throw new Error('Error cargando sugerencias');
+  const data = await r.json();
+  STATE.team = data.team;
+  STATE.pendientes = data.pendientes || [];
+  STATE.bimestres = (data.bimestres || []).sort((a, b) => a.sortKey - b.sortKey);
+  STATE.loaded.pendientes = true;
+}
+
+async function loadMias() {
+  const r = await fetch('/api/lideres/aprobadas');
+  if (!r.ok) throw new Error('Error cargando mis decisiones');
+  const data = await r.json();
+  STATE.team = data.team;
+  STATE.decisiones = data.decisiones || [];
+  STATE.loaded.mias = true;
+}
+
+async function ensureLoaded(tab) {
+  if (tab === 'pendientes' && !STATE.loaded.pendientes) await loadPendientes();
+  if (tab === 'mias' && !STATE.loaded.mias) await loadMias();
+}
+
+async function init() {
+  try {
+    await loadPendientes();
+    render();
+  } catch (err) {
+    document.getElementById('content').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">⚠️</div>
+        <h2>No se pudo cargar</h2>
+        <p>${escapeHTML(err.message)}</p>
+      </div>`;
+  }
+}
+
+function render() {
+  document.getElementById('teamPill').textContent = `Equipo: ${STATE.team || '—'}`;
+  document.getElementById('countPendientes').textContent = STATE.pendientes.length;
+  document.getElementById('countMias').textContent = STATE.decisiones.length;
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === STATE.activeTab);
+  });
+
+  if (STATE.activeTab === 'pendientes') renderPendientes();
+  else renderMias();
+}
+
+function renderPendientes() {
+  const term = STATE.search.trim().toLowerCase();
+  const filtered = STATE.pendientes.filter(s => {
+    if (!term) return true;
+    return (s.herramienta + ' ' + s.titulo_original + ' ' + s.resumen).toLowerCase().includes(term);
+  });
+
+  const summaryHTML = `
+    <div class="summary">
+      <div class="summary-item"><span class="summary-label">Tu equipo</span><span class="summary-value">${escapeHTML(STATE.team || '—')}</span></div>
+      <div class="summary-item"><span class="summary-label">Pendientes</span><span class="summary-value">${STATE.pendientes.length}</span></div>
+      <div class="summary-item"><span class="summary-label">Bimestres disponibles</span><span class="summary-value">${STATE.bimestres.length}</span></div>
+    </div>`;
+
+  const controlsHTML = `
+    <div class="controls">
+      <div class="search"><input type="text" id="searchInput" placeholder="Buscar herramienta o texto…" value="${escapeHTML(STATE.search)}"/></div>
+    </div>`;
+
+  let body;
+  if (filtered.length === 0) {
+    body = STATE.pendientes.length === 0
+      ? `<div class="empty-state"><div class="icon">🎉</div><h2>¡Estás al día!</h2><p>No hay sugerencias pendientes de revisar para tu equipo.</p></div>`
+      : `<div class="empty-state"><div class="icon">🔍</div><h2>Sin resultados</h2><p>Ninguna sugerencia coincide con tu búsqueda.</p></div>`;
+  } else {
+    body = `<div class="cards">${filtered.map(renderCard).join('')}</div>`;
+  }
+
+  document.getElementById('content').innerHTML = summaryHTML + controlsHTML + body;
+  wireEvents();
+}
+
+function renderCard(s) {
+  const rel = (s.relevancia || 'media').toLowerCase();
+  return `<div class="card relevancia-${rel}" data-hash="${escapeHTML(s._hash)}">
+    <div class="card-head">
+      <div>
+        <div class="card-tool">${escapeHTML(s.herramienta)}</div>
+        <div class="card-title">${escapeHTML(s.titulo_original)}</div>
+      </div>
+      <div class="card-meta">
+        <span class="chip chip-${rel}">${escapeHTML(s.relevancia || 'media')}</span>
+        ${s.fecha_deteccion ? `<span class="chip chip-baja">${escapeHTML(s.fecha_deteccion)}</span>` : ''}
+      </div>
+    </div>
+    <div class="card-body">
+      ${s.resumen ? `<div class="card-row"><span class="card-label">Resumen IA</span><span class="card-value">${escapeHTML(s.resumen)}</span></div>` : ''}
+      ${s.proximo_paso ? `<div class="card-row"><span class="card-label">Paso sugerido</span><span class="card-value">${escapeHTML(s.proximo_paso)}</span></div>` : ''}
+      ${s.fuente_url ? `<div class="card-row"><span class="card-label">Fuente</span><span class="card-value"><a href="${escapeHTML(s.fuente_url)}" target="_blank" rel="noopener">${escapeHTML(s.fuente_url)}</a></span></div>` : ''}
+    </div>
+    <div class="card-actions">
+      <button class="btn red" data-action="reject" data-hash="${escapeHTML(s._hash)}">✕ No relevante</button>
+      <button class="btn primary" data-action="edit" data-hash="${escapeHTML(s._hash)}">✏️ Editar y aprobar</button>
+      <button class="btn green" data-action="approve-as-is" data-hash="${escapeHTML(s._hash)}">✓ Aprobar</button>
+    </div>
+  </div>`;
+}
+
+function renderMias() {
+  const list = STATE.decisiones;
+  const summaryHTML = `
+    <div class="summary">
+      <div class="summary-item"><span class="summary-label">Tu equipo</span><span class="summary-value">${escapeHTML(STATE.team || '—')}</span></div>
+      <div class="summary-item"><span class="summary-label">Aprobadas</span><span class="summary-value">${list.filter(d => d.decision === 'approved').length}</span></div>
+      <div class="summary-item"><span class="summary-label">Descartadas</span><span class="summary-value">${list.filter(d => d.decision === 'rejected').length}</span></div>
+    </div>`;
+  let body;
+  if (list.length === 0) {
+    body = `<div class="empty-state"><div class="icon">📋</div><h2>Sin decisiones aún</h2><p>Cuando aprobás o descartás sugerencias, aparecen acá.</p></div>`;
+  } else {
+    body = `<div class="cards">${list.map(renderDecision).join('')}</div>`;
+  }
+  document.getElementById('content').innerHTML = summaryHTML + body;
+  wireEvents();
+}
+
+function renderDecision(d) {
+  const isApproved = d.decision === 'approved';
+  const fields = d.fields || {};
+  const date = d.decidedAt ? new Date(d.decidedAt).toLocaleString('es-AR') : '—';
+  return `<div class="decision-card ${isApproved ? '' : 'rejected'}">
+    <div class="decision-head">
+      <div>
+        <div class="decision-tool">${escapeHTML(fields.herramienta || '(sin nombre)')}</div>
+        <div class="decision-meta">${date}${d.bimestreDestino ? ' · ' + escapeHTML(d.bimestreDestino) : ''}</div>
+      </div>
+      <span class="decision-status ${isApproved ? 'approved' : 'rejected'}">${isApproved ? '✓ Aprobada' : '✕ Descartada'}</span>
+    </div>
+    ${isApproved ? `
+      <div class="card-body">
+        ${fields.queCambio     ? `<div class="card-row"><span class="card-label">Qué cambió</span><span class="card-value">${escapeHTML(fields.queCambio)}</span></div>` : ''}
+        ${fields.nuevaPolitica ? `<div class="card-row"><span class="card-label">Nueva política</span><span class="card-value">${escapeHTML(fields.nuevaPolitica)}</span></div>` : ''}
+        ${fields.deficiencia   ? `<div class="card-row"><span class="card-label">Deficiencia</span><span class="card-value">${escapeHTML(fields.deficiencia)}</span></div>` : ''}
+        ${fields.responsable   ? `<div class="card-row"><span class="card-label">Responsable</span><span class="card-value">${escapeHTML(fields.responsable)}</span></div>` : ''}
+        ${fields.proximoPaso   ? `<div class="card-row"><span class="card-label">Próximo paso</span><span class="card-value">${escapeHTML(fields.proximoPaso)}</span></div>` : ''}
+      </div>` : ''}
+  </div>`;
+}
+
+function wireEvents() {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', async () => {
+      STATE.activeTab = t.dataset.tab;
+      await ensureLoaded(STATE.activeTab);
+      render();
+    });
+  });
+  const search = document.getElementById('searchInput');
+  if (search) {
+    search.addEventListener('input', e => {
+      STATE.search = e.target.value;
+      const pos = e.target.selectionStart;
+      render();
+      const ni = document.getElementById('searchInput');
+      if (ni) { ni.focus(); ni.setSelectionRange(pos, pos); }
+    });
+  }
+  document.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', e => {
+      const action = el.dataset.action;
+      const hash = el.dataset.hash;
+      const s = STATE.pendientes.find(x => x._hash === hash);
+      if (!s) return;
+      if (action === 'reject') return doReject(s);
+      if (action === 'approve-as-is') return openModalAndPreFill(s, true);
+      if (action === 'edit') return openModalAndPreFill(s, false);
+    });
+  });
+}
+
+function defaultBimestre() {
+  // Por defecto: el bimestre/mes activo más reciente con sortKey <= ahora.
+  // Si la lista está ordenada cronológicamente, devolvemos el último.
+  if (STATE.bimestres.length === 0) return '';
+  return STATE.bimestres[STATE.bimestres.length - 1].sheet;
+}
+
+function openModalAndPreFill(s, autoSubmit) {
+  MODAL.suggestion = s;
+  document.getElementById('modalTitle').textContent = s.herramienta;
+  document.getElementById('modalSubtitle').textContent = 'Aprobar para ' + STATE.team;
+  const body = document.getElementById('modalBody');
+  const bimOptions = STATE.bimestres.map(b => `<option value="${escapeHTML(b.sheet)}" ${b.sheet === defaultBimestre() ? 'selected' : ''}>${escapeHTML(b.label)}</option>`).join('');
+  body.innerHTML = `
+    <div class="field">
+      <label>Período destino (en qué hoja se carga)</label>
+      <select id="f-bimestre">${bimOptions}</select>
+    </div>
+    <div class="field">
+      <label>Herramienta</label>
+      <input type="text" id="f-herramienta" value="${escapeHTML(s.herramienta)}"/>
+    </div>
+    <div class="field">
+      <label>Qué cambió</label>
+      <textarea id="f-queCambio">${escapeHTML(s.titulo_original || '')}</textarea>
+    </div>
+    <div class="field">
+      <label>Nueva política / actualización</label>
+      <textarea id="f-nuevaPolitica">${escapeHTML(s.resumen || '')}</textarea>
+    </div>
+    <div class="field">
+      <label>Deficiencia / riesgo detectado</label>
+      <textarea id="f-deficiencia"></textarea>
+    </div>
+    <div class="field">
+      <label>Responsable</label>
+      <input type="text" id="f-responsable" value="${escapeHTML(STATE.team)}"/>
+    </div>
+    <div class="field">
+      <label>Próximo paso</label>
+      <textarea id="f-proximoPaso">${escapeHTML(s.proximo_paso || '')}</textarea>
+    </div>
+  `;
+  document.getElementById('editModal').classList.add('open');
+  if (autoSubmit) {
+    // En modo "aprobar tal cual" disparamos directo, pero igual abrimos el modal
+    // por si el líder quiere ajustar el bimestre destino.
+    document.getElementById('modalApprove').focus();
+  }
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  MODAL.suggestion = null;
+}
+
+async function doApproveFromModal() {
+  const s = MODAL.suggestion;
+  if (!s) return;
+  const btn = document.getElementById('modalApprove');
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  const body = {
+    suggestionHash: s._hash,
+    decision: 'approved',
+    bimestreDestino: document.getElementById('f-bimestre').value,
+    herramienta:     document.getElementById('f-herramienta').value.trim(),
+    queCambio:       document.getElementById('f-queCambio').value.trim(),
+    nuevaPolitica:   document.getElementById('f-nuevaPolitica').value.trim(),
+    deficiencia:     document.getElementById('f-deficiencia').value.trim(),
+    responsable:     document.getElementById('f-responsable').value.trim(),
+    proximoPaso:     document.getElementById('f-proximoPaso').value.trim(),
+  };
+  try {
+    const r = await fetch('/api/lideres/decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error al guardar');
+    closeModal();
+    showToast(data.n8n && data.n8n.ok ? '✓ Aprobada y enviada al Sheet' : data.n8n && data.n8n.warning ? 'Aprobada (no se escribió en el Sheet: ' + data.n8n.warning + ')' : '✓ Aprobada');
+    // Quitar de pendientes en memoria
+    STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
+    STATE.loaded.mias = false; // forzar recarga la próxima vez
+    render();
+  } catch (err) {
+    showToast(err.message || 'Error', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✓ Aprobar y enviar al Sheet';
+  }
+}
+
+async function doReject(s) {
+  try {
+    const r = await fetch('/api/lideres/decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suggestionHash: s._hash, decision: 'rejected' }),
+    });
+    if (!r.ok) throw new Error('Error al descartar');
+    STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
+    STATE.loaded.mias = false;
+    showToast('Sugerencia descartada para tu equipo');
+    render();
+  } catch (err) {
+    showToast(err.message || 'Error', true);
+  }
+}
+
+// Theme toggle
+function updateThemeIcon() {
+  const t = document.documentElement.getAttribute('data-theme');
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const c = document.documentElement.getAttribute('data-theme');
+  const n = c === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', n);
+  localStorage.setItem('theme', n);
+  updateThemeIcon();
+});
+updateThemeIcon();
+
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  STATE.loaded = { pendientes: false, mias: false };
+  await ensureLoaded(STATE.activeTab);
+  render();
+});
+
+// Modal handlers
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalCancel').addEventListener('click', closeModal);
+document.getElementById('modalApprove').addEventListener('click', doApproveFromModal);
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target.id === 'editModal') closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+init();
+</script>
+</body>
+</html>

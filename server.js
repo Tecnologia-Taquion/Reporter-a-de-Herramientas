@@ -12,6 +12,70 @@ const APP_PASSWORD  = process.env.APP_PASSWORD;
 const AUTH_ENABLED  = !!APP_PASSWORD;
 const COOKIE_SECRET = 'taquion_reporteria_2025';
 
+// ─── Líderes ───
+// LEADERS_PASSWORDS es un JSON con { equipo: contraseña } configurado en EasyPanel.
+// N8N_WRITE_WEBHOOK_URL es la URL del workflow de n8n que escribe en el Sheet.
+let LEADERS_PASSWORDS = {};
+try {
+  LEADERS_PASSWORDS = process.env.LEADERS_PASSWORDS ? JSON.parse(process.env.LEADERS_PASSWORDS) : {};
+} catch (err) {
+  console.error('LEADERS_PASSWORDS env var no es JSON válido:', err.message);
+  LEADERS_PASSWORDS = {};
+}
+const N8N_WRITE_WEBHOOK_URL = process.env.N8N_WRITE_WEBHOOK_URL || '';
+const LEADERS_ENABLED = Object.keys(LEADERS_PASSWORDS).length > 0;
+
+// Almacenamiento de decisiones. Para persistir entre redeploys, montá un volumen
+// en EasyPanel en /app/data. Si no hay volumen, las decisiones se pierden al
+// redeployar (pero las novedades aprobadas ya quedan escritas en el Sheet vía n8n).
+const DATA_DIR = path.join(__dirname, 'data');
+const DECISIONS_FILE = path.join(DATA_DIR, 'leader-decisions.json');
+
+function loadDecisions() {
+  try {
+    if (!require('fs').existsSync(DATA_DIR)) require('fs').mkdirSync(DATA_DIR, { recursive: true });
+    if (!require('fs').existsSync(DECISIONS_FILE)) return { decisions: [] };
+    return JSON.parse(require('fs').readFileSync(DECISIONS_FILE, 'utf8'));
+  } catch (err) {
+    console.error('Error leyendo decisiones:', err.message);
+    return { decisions: [] };
+  }
+}
+
+function saveDecisions(data) {
+  try {
+    if (!require('fs').existsSync(DATA_DIR)) require('fs').mkdirSync(DATA_DIR, { recursive: true });
+    require('fs').writeFileSync(DECISIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error guardando decisiones:', err.message);
+  }
+}
+
+function makeLeaderToken(team, pw) {
+  return crypto.createHash('sha256').update(`${team}:${pw}:${COOKIE_SECRET}:leader`).digest('hex');
+}
+
+function getLeaderFromCookie(req) {
+  const cookies = parseCookies(req);
+  const raw = cookies['leader_auth'];
+  if (!raw) return null;
+  const [encodedTeam, token] = raw.split('|');
+  if (!encodedTeam || !token) return null;
+  let team;
+  try { team = decodeURIComponent(encodedTeam); } catch (e) { return null; }
+  const expectedPw = LEADERS_PASSWORDS[team];
+  if (!expectedPw) return null;
+  if (makeLeaderToken(team, expectedPw) !== token) return null;
+  return team;
+}
+
+function suggestionHash(s) {
+  // Identidad estable de una sugerencia, basada en herramienta + título original.
+  // Si la IA re-procesa el mismo cambio, el hash queda igual y no se duplica para el líder.
+  const key = `${(s.herramienta || '').toLowerCase().trim()}|${(s.titulo_original || '').toLowerCase().trim()}`;
+  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+}
+
 // Los bimestres se descubren automáticamente leyendo la lista de hojas del Google
 // Sheet en runtime (función discoverBimestres). Si agregás, eliminás o renombrás
 // una hoja en la planilla, el panel se actualiza solo en la próxima carga (o al
@@ -121,11 +185,31 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: false }));
 
+// Rutas que NO requieren la contraseña principal (los líderes tienen su propio sistema)
+const LEADER_PATHS = ['/lideres', '/lideres/login', '/lideres/logout', '/api/lideres'];
+function isLeaderPath(p) {
+  return LEADER_PATHS.some(prefix => p === prefix || p.startsWith(prefix + '/') || p.startsWith(prefix + '?'));
+}
+
 app.use((req, res, next) => {
   if (!AUTH_ENABLED) return next();
   if (req.path === '/login' || req.path === '/logout') return next();
+  if (isLeaderPath(req.path)) return next();
   if (isAuthenticated(req)) return next();
   res.redirect('/login');
+});
+
+// Gate de líderes: protege /lideres y /api/lideres/* salvo el login.
+app.use((req, res, next) => {
+  if (!isLeaderPath(req.path)) return next();
+  if (req.path === '/lideres/login' || req.path === '/lideres/logout') return next();
+  const team = getLeaderFromCookie(req);
+  if (team) {
+    req.leaderTeam = team;
+    return next();
+  }
+  if (req.path.startsWith('/api/lideres')) return res.status(401).json({ error: 'No autenticado' });
+  res.redirect('/lideres/login');
 });
 
 app.get('/login', (req, res) => {
@@ -181,6 +265,80 @@ app.post('/login', (req, res) => {
 app.get('/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'auth=; HttpOnly; Max-Age=0; Path=/');
   res.redirect('/login');
+});
+
+/* ─── Login de líderes ─── */
+app.get('/lideres/login', (req, res) => {
+  if (!LEADERS_ENABLED) {
+    return res.status(503).send('<h1>Líderes no configurados</h1><p>Falta la variable de entorno <code>LEADERS_PASSWORDS</code> en el servidor.</p>');
+  }
+  const error = req.query.error;
+  const teams = Object.keys(LEADERS_PASSWORDS);
+  const options = teams.map(t => `<option value="${t}">${t}</option>`).join('');
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👥</text></svg>"/>
+  <title>Acceso Líderes — Reportería de Herramientas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Nunito',sans-serif;background:#FDFCF0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .card{background:#fff;border-radius:24px;padding:44px 36px;width:420px;max-width:92vw;box-shadow:0 8px 30px rgba(0,0,0,0.08);text-align:center}
+    .icon{width:56px;height:56px;background:linear-gradient(135deg,#E3F2FD,#F3E5F5);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 16px}
+    h1{font-size:1.2rem;font-weight:800;color:#374151;margin-bottom:6px}
+    .sub{font-size:0.8rem;color:#9CA3AF;font-weight:600;margin-bottom:28px}
+    label{display:block;text-align:left;font-size:0.7rem;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;margin-top:14px}
+    select,input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;background:#FDFCF0;transition:border-color .2s;appearance:none}
+    select{background-image:linear-gradient(45deg,transparent 50%,#6B7280 50%),linear-gradient(135deg,#6B7280 50%,transparent 50%);background-position:calc(100% - 22px) 50%,calc(100% - 17px) 50%;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer}
+    select:focus,input[type=password]:focus{border-color:#C4B5FD}
+    button{width:100%;padding:12px;background:#374151;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s;margin-top:22px}
+    button:hover{background:#1F2937}
+    .error{margin-top:14px;color:#DC2626;font-size:0.76rem;font-weight:700;background:#FEF2F2;padding:8px 16px;border-radius:50px;display:inline-block}
+    .footer-link{margin-top:24px;font-size:0.74rem;color:#9CA3AF;font-weight:600}
+    .footer-link a{color:#7C3AED;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">👥</div>
+    <h1>Acceso Líderes</h1>
+    <p class="sub">Ingresá con la contraseña de tu equipo</p>
+    <form method="POST" action="/lideres/login">
+      <label for="team">Equipo</label>
+      <select name="team" id="team" required>${options}</select>
+      <label for="password">Contraseña</label>
+      <input type="password" name="password" id="password" placeholder="•••••••••" autocomplete="current-password" required/>
+      <button type="submit">Ingresar →</button>
+    </form>
+    ${error ? '<p class="error">Equipo o contraseña incorrectos</p>' : ''}
+    <p class="footer-link">¿Sos admin? <a href="/login">Acceder al panel principal</a></p>
+  </div>
+</body>
+</html>`);
+});
+
+app.post('/lideres/login', (req, res) => {
+  const { team, password } = req.body || {};
+  if (!team || !password) return res.redirect('/lideres/login?error=1');
+  const expectedPw = LEADERS_PASSWORDS[team];
+  if (!expectedPw || expectedPw !== password) {
+    return res.redirect('/lideres/login?error=1');
+  }
+  const maxAge = 7 * 24 * 60 * 60;
+  const token = makeLeaderToken(team, expectedPw);
+  // El valor de cookie es "team|token" para poder leer el equipo desde el server.
+  res.setHeader('Set-Cookie',
+    `leader_auth=${encodeURIComponent(team)}|${token}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}; Path=/`
+  );
+  res.redirect('/lideres');
+});
+
+app.get('/lideres/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'leader_auth=; HttpOnly; Max-Age=0; Path=/');
+  res.redirect('/lideres/login');
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -310,8 +468,199 @@ app.post('/api/refresh', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ─── API: Líderes ─── */
+
+// Fetcha y parsea la hoja SUGERENCIAS (la del workflow de auto-fetch de n8n).
+// La hoja tiene columnas: fecha_deteccion | herramienta | fuente_url | titulo_original
+// | resumen | proximo_paso | relevancia | estado | bimestre_destino
+async function fetchSugerencias() {
+  // Encontramos el gid de la hoja "SUGERENCIAS" via discover (cache 30 min igual que el resto)
+  const bimestres = await discoverBimestres(); // discoverBimestres filtra hojas con meses; SUGERENCIAS no aparece
+  // Para SUGERENCIAS tenemos que listarla aparte. Hacemos un re-fetch del pubhtml
+  // y buscamos cualquier hoja llamada exactamente SUGERENCIAS.
+  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISH_ID}/pubhtml`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`No se pudo listar hojas: ${r.status}`);
+  const html = await r.text();
+  const re = /items\.push\(\{name:\s*"([^"]+)"[\s\S]*?gid:\s*"(\d+)"/g;
+  let m, sugGid = null;
+  while ((m = re.exec(html)) !== null) {
+    if (/sugerencias/i.test(m[1])) { sugGid = m[2]; break; }
+  }
+  if (!sugGid) throw new Error('No se encontró la hoja SUGERENCIAS en la planilla.');
+
+  const csv = await fetchSheetByGid(sugGid);
+  const rows = parseCSV(csv);
+  if (rows.length === 0) return [];
+  // Primera fila = headers
+  const headers = rows[0].map(h => (h || '').trim());
+  const idx = name => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  const cols = {
+    fecha_deteccion:  idx('fecha_deteccion'),
+    herramienta:      idx('herramienta'),
+    fuente_url:       idx('fuente_url'),
+    titulo_original:  idx('titulo_original'),
+    resumen:          idx('resumen'),
+    proximo_paso:     idx('proximo_paso'),
+    relevancia:       idx('relevancia'),
+    estado:           idx('estado'),
+    bimestre_destino: idx('bimestre_destino'),
+  };
+  const items = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const get = key => cols[key] >= 0 ? (row[cols[key]] || '').trim() : '';
+    const herramienta = get('herramienta');
+    if (!herramienta) continue; // saltea filas vacías
+    items.push({
+      fecha_deteccion:  get('fecha_deteccion'),
+      herramienta,
+      fuente_url:       get('fuente_url'),
+      titulo_original:  get('titulo_original'),
+      resumen:          get('resumen'),
+      proximo_paso:     get('proximo_paso'),
+      relevancia:       get('relevancia'),
+      estado:           get('estado'),
+      bimestre_destino: get('bimestre_destino'),
+    });
+  }
+  return items.map(s => ({ ...s, _hash: suggestionHash(s) }));
+}
+
+// Endpoint: GET /api/lideres/sugerencias
+// Devuelve las sugerencias que aún no decidió ESTE líder, + la lista de bimestres
+// disponibles para elegir destino.
+app.get('/api/lideres/sugerencias', async (req, res) => {
+  try {
+    const team = req.leaderTeam;
+    const sugerencias = await fetchSugerencias();
+    const data = loadDecisions();
+    const decidedHashes = new Set(
+      data.decisions.filter(d => d.leaderTeam === team).map(d => d.suggestionHash)
+    );
+    const pendientes = sugerencias.filter(s => !decidedHashes.has(s._hash));
+    const bimestres = (await discoverBimestres()).map(b => ({ sheet: b.sheet, label: b.label, sortKey: b.sortKey }));
+    res.json({ team, pendientes, bimestres });
+  } catch (err) {
+    console.error('Error /api/lideres/sugerencias:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: GET /api/lideres/aprobadas
+// Devuelve las decisiones tomadas por ESTE líder (las acepted + rejected).
+app.get('/api/lideres/aprobadas', (req, res) => {
+  try {
+    const team = req.leaderTeam;
+    const data = loadDecisions();
+    const mias = data.decisions
+      .filter(d => d.leaderTeam === team)
+      .sort((a, b) => (b.decidedAt || '').localeCompare(a.decidedAt || ''));
+    res.json({ team, decisiones: mias });
+  } catch (err) {
+    console.error('Error /api/lideres/aprobadas:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: POST /api/lideres/decision
+// Body: { suggestionHash, decision: 'approved'|'rejected', bimestreDestino?,
+//         herramienta?, queCambio?, nuevaPolitica?, deficiencia?, responsable?, proximoPaso? }
+// Si decision='approved', además dispara el webhook de n8n para escribir en el Sheet.
+app.use('/api/lideres', express.json({ limit: '512kb' }));
+app.post('/api/lideres/decision', async (req, res) => {
+  try {
+    const team = req.leaderTeam;
+    const body = req.body || {};
+    const { suggestionHash: hash, decision } = body;
+    if (!hash) return res.status(400).json({ error: 'Falta suggestionHash' });
+    if (decision !== 'approved' && decision !== 'rejected') {
+      return res.status(400).json({ error: 'decision debe ser approved o rejected' });
+    }
+
+    // Guardar decisión local primero (siempre)
+    const data = loadDecisions();
+    // Reemplazá decisión previa del mismo líder sobre la misma sugerencia (re-decisión).
+    data.decisions = data.decisions.filter(d => !(d.leaderTeam === team && d.suggestionHash === hash));
+    const decisionRecord = {
+      id: crypto.randomBytes(8).toString('hex'),
+      leaderTeam: team,
+      suggestionHash: hash,
+      decision,
+      decidedAt: new Date().toISOString(),
+      fields: decision === 'approved' ? {
+        herramienta:   body.herramienta || '',
+        queCambio:     body.queCambio || '',
+        nuevaPolitica: body.nuevaPolitica || '',
+        deficiencia:   body.deficiencia || '',
+        responsable:   body.responsable || '',
+        proximoPaso:   body.proximoPaso || '',
+      } : null,
+      bimestreDestino: decision === 'approved' ? (body.bimestreDestino || '') : null,
+    };
+    data.decisions.push(decisionRecord);
+    saveDecisions(data);
+
+    // Si está aprobada, disparamos el webhook de n8n para escribir en el Sheet.
+    let n8nResult = null;
+    if (decision === 'approved') {
+      if (!N8N_WRITE_WEBHOOK_URL || N8N_WRITE_WEBHOOK_URL === 'PENDIENTE') {
+        n8nResult = { warning: 'N8N_WRITE_WEBHOOK_URL no configurada — decisión guardada pero no se escribió en el Sheet.' };
+      } else if (!decisionRecord.bimestreDestino) {
+        n8nResult = { warning: 'No se especificó bimestreDestino — decisión guardada pero no se escribió en el Sheet.' };
+      } else {
+        try {
+          const r = await fetch(N8N_WRITE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              equipo:           team,
+              bimestre:         decisionRecord.bimestreDestino,
+              herramienta:      decisionRecord.fields.herramienta,
+              queCambio:        decisionRecord.fields.queCambio,
+              nuevaPolitica:    decisionRecord.fields.nuevaPolitica,
+              deficiencia:      decisionRecord.fields.deficiencia,
+              responsable:      decisionRecord.fields.responsable,
+              proximoPaso:      decisionRecord.fields.proximoPaso,
+              source: { suggestionHash: hash, decisionId: decisionRecord.id },
+            }),
+          });
+          n8nResult = { status: r.status, ok: r.ok };
+          if (r.ok) {
+            // Invalidar cache del panel público para que la novedad aparezca al toque.
+            dataCache = null;
+            cacheTTL = 0;
+          }
+        } catch (err) {
+          console.error('Error llamando a n8n webhook:', err.message);
+          n8nResult = { error: err.message };
+        }
+      }
+    }
+
+    res.json({ ok: true, decision: decisionRecord, n8n: n8nResult });
+  } catch (err) {
+    console.error('Error /api/lideres/decision:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// HTML principal del panel de líderes (servido vía estático, pero gated por el
+// middleware). Sirve lideres.html.
+app.get('/lideres', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'lideres.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Servidor corriendo en http://localhost:${PORT}`);
-  if (AUTH_ENABLED) console.log('🔒 Autenticación activada');
-  else console.log('⚠️  Sin contraseña (APP_PASSWORD no configurada)');
+  if (AUTH_ENABLED) console.log('🔒 Autenticación admin activada');
+  else console.log('⚠️  Sin contraseña admin (APP_PASSWORD no configurada)');
+  if (LEADERS_ENABLED) {
+    console.log(`👥 Líderes habilitados: ${Object.keys(LEADERS_PASSWORDS).join(', ')}`);
+    if (!N8N_WRITE_WEBHOOK_URL || N8N_WRITE_WEBHOOK_URL === 'PENDIENTE') {
+      console.log('   ⚠️  N8N_WRITE_WEBHOOK_URL pendiente — las aprobaciones no escribirán en el Sheet hasta configurarla.');
+    }
+  } else {
+    console.log('⚠️  Líderes deshabilitados (LEADERS_PASSWORDS no configurada)');
+  }
 });
