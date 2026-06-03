@@ -559,6 +559,92 @@ app.post('/api/refresh', (req, res) => {
 
 /* ─── API: Líderes ─── */
 
+// Encuentra el gid de una hoja por nombre (case-insensitive, exact match).
+async function findSheetGid(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/e/${PUBLISH_ID}/pubhtml`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`No se pudo listar hojas: ${r.status}`);
+  const html = await r.text();
+  const re = /items\.push\(\{name:\s*"([^"]+)"[\s\S]*?gid:\s*"(\d+)"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (m[1].trim().toLowerCase() === sheetName.toLowerCase()) return m[2];
+  }
+  return null;
+}
+
+// Cache para las decisiones leídas del sheet (TTL corto).
+let decisionsRemoteCache = null;
+let decisionsRemoteCacheTTL = 0;
+const DECISIONS_REMOTE_TTL_MS = 60 * 1000;
+
+// Lee la hoja DECISIONES como source of truth de qué decidió cada líder.
+// Columnas esperadas (fila 1): sugerencia_hash | equipo | decision | herramienta
+// | titulo_original | bimestre_destino | fecha
+async function fetchDecisionsFromSheet() {
+  const now = Date.now();
+  if (decisionsRemoteCache && now < decisionsRemoteCacheTTL) return decisionsRemoteCache;
+
+  let decisions = [];
+  try {
+    const gid = await findSheetGid('DECISIONES');
+    if (!gid) {
+      decisionsRemoteCache = [];
+      decisionsRemoteCacheTTL = now + DECISIONS_REMOTE_TTL_MS;
+      return [];
+    }
+    const csv = await fetchSheetByGid(gid);
+    const rows = parseCSV(csv);
+    if (rows.length === 0) {
+      decisionsRemoteCache = [];
+      decisionsRemoteCacheTTL = now + DECISIONS_REMOTE_TTL_MS;
+      return [];
+    }
+    const headers = rows[0].map(h => (h || '').trim().toLowerCase());
+    const idx = name => headers.findIndex(h => h === name);
+    const cols = {
+      sugerencia_hash:  idx('sugerencia_hash'),
+      equipo:           idx('equipo'),
+      decision:         idx('decision'),
+      herramienta:      idx('herramienta'),
+      titulo_original:  idx('titulo_original'),
+      bimestre_destino: idx('bimestre_destino'),
+      fecha:            idx('fecha'),
+    };
+    if (cols.sugerencia_hash < 0 || cols.equipo < 0 || cols.decision < 0) {
+      console.warn('DECISIONES sheet: faltan columnas requeridas (sugerencia_hash, equipo, decision)');
+      decisionsRemoteCache = [];
+      decisionsRemoteCacheTTL = now + DECISIONS_REMOTE_TTL_MS;
+      return [];
+    }
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const get = key => cols[key] >= 0 ? ((row[cols[key]] || '').toString().trim()) : '';
+      const hash = get('sugerencia_hash');
+      const equipo = get('equipo');
+      const decision = get('decision');
+      if (!hash || !equipo || !decision) continue;
+      decisions.push({
+        sugerencia_hash: hash,
+        equipo,
+        decision,
+        herramienta:      get('herramienta'),
+        titulo_original:  get('titulo_original'),
+        bimestre_destino: get('bimestre_destino'),
+        fecha:            get('fecha'),
+      });
+    }
+  } catch (err) {
+    console.error('Error leyendo DECISIONES sheet:', err.message);
+    // En error devolvemos cache previa (si existe) o vacío
+    return decisionsRemoteCache || [];
+  }
+
+  decisionsRemoteCache = decisions;
+  decisionsRemoteCacheTTL = now + DECISIONS_REMOTE_TTL_MS;
+  return decisions;
+}
+
 // Fetcha y parsea la hoja SUGERENCIAS (la del workflow de auto-fetch de n8n).
 // La hoja tiene columnas: fecha_deteccion | herramienta | fuente_url | titulo_original
 // | resumen | proximo_paso | relevancia | estado | bimestre_destino
@@ -623,10 +709,14 @@ app.get('/api/lideres/sugerencias', async (req, res) => {
   try {
     const team = req.leaderTeam;
     const sugerencias = await fetchSugerencias();
-    const data = loadDecisions();
-    const decidedHashes = new Set(
-      data.decisions.filter(d => d.leaderTeam === team).map(d => d.suggestionHash)
-    );
+    const local = loadDecisions();
+    const remote = await fetchDecisionsFromSheet().catch(() => []);
+
+    // Unión de hashes decididos por este equipo (local + remoto)
+    const decidedHashes = new Set();
+    local.decisions.filter(d => d.leaderTeam === team).forEach(d => decidedHashes.add(d.suggestionHash));
+    remote.filter(d => d.equipo === team).forEach(d => decidedHashes.add(d.sugerencia_hash));
+
     const pendientes = sugerencias.filter(s => !decidedHashes.has(s._hash));
     const bimestres = (await discoverBimestres()).map(b => ({ sheet: b.sheet, label: b.label, sortKey: b.sortKey }));
     const herramientasMiEquipo = TEAMS_TOOLS[team] || [];
@@ -638,13 +728,40 @@ app.get('/api/lideres/sugerencias', async (req, res) => {
 });
 
 // Endpoint: GET /api/lideres/aprobadas
-// Devuelve las decisiones tomadas por ESTE líder (las acepted + rejected).
-app.get('/api/lideres/aprobadas', (req, res) => {
+// Devuelve las decisiones tomadas por ESTE líder, mergeando lo del sheet
+// (source of truth, persiste entre redeploys) con el JSON local (datos ricos
+// como queCambio/nuevaPolitica que no se guardan en DECISIONES).
+app.get('/api/lideres/aprobadas', async (req, res) => {
   try {
     const team = req.leaderTeam;
-    const data = loadDecisions();
-    const mias = data.decisions
-      .filter(d => d.leaderTeam === team)
+    const local = loadDecisions();
+    const remote = await fetchDecisionsFromSheet().catch(() => []);
+
+    // Mapa por hash con la versión "rica" (local) preferida sobre la "remota" (sheet).
+    const byHash = new Map();
+    remote.filter(d => d.equipo === team).forEach(d => {
+      byHash.set(d.sugerencia_hash, {
+        id: 'remote-' + d.sugerencia_hash,
+        leaderTeam: team,
+        suggestionHash: d.sugerencia_hash,
+        decision: d.decision,
+        decidedAt: d.fecha ? `${d.fecha}T00:00:00.000Z` : '',
+        fields: {
+          herramienta: d.herramienta || '',
+          titulo_original: d.titulo_original || '',
+          queCambio: '', nuevaPolitica: '', deficiencia: '',
+          responsable: '', proximoPaso: '',
+        },
+        bimestreDestino: d.bimestre_destino || null,
+        source: 'remote',
+      });
+    });
+    // Local sobreescribe (tiene los campos ricos)
+    local.decisions.filter(d => d.leaderTeam === team).forEach(d => {
+      byHash.set(d.suggestionHash, { ...d, source: 'local' });
+    });
+
+    const mias = Array.from(byHash.values())
       .sort((a, b) => (b.decidedAt || '').localeCompare(a.decidedAt || ''));
     res.json({ team, decisiones: mias });
   } catch (err) {
@@ -694,46 +811,50 @@ app.post('/api/lideres/decision', async (req, res) => {
     data.decisions.push(decisionRecord);
     saveDecisions(data);
 
-    // Si está aprobada, disparamos el webhook de n8n para escribir en el Sheet.
+    // Disparamos el webhook de n8n SIEMPRE (tanto aprobaciones como rechazos)
+    // para que quede registrado en la hoja DECISIONES. Si es aprobación, n8n
+    // además appendea a la hoja del bimestre destino.
     let n8nResult = null;
-    if (decision === 'approved') {
-      if (!N8N_WRITE_WEBHOOK_URL || N8N_WRITE_WEBHOOK_URL === 'PENDIENTE') {
-        n8nResult = { warning: 'N8N_WRITE_WEBHOOK_URL no configurada — decisión guardada pero no se escribió en el Sheet.' };
-      } else if (!decisionRecord.bimestreDestino) {
-        n8nResult = { warning: 'No se especificó bimestreDestino — decisión guardada pero no se escribió en el Sheet.' };
-      } else {
-        try {
-          // Payload alineado a las columnas del nuevo sheet plano.
-          const r = await fetch(N8N_WRITE_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bimestre:         decisionRecord.bimestreDestino,
-              herramienta:      decisionRecord.fields.herramienta,
-              equipo:           team,
-              que_cambio:       decisionRecord.fields.queCambio,
-              nueva_politica:   decisionRecord.fields.nuevaPolitica,
-              deficiencia:      decisionRecord.fields.deficiencia,
-              responsable:      decisionRecord.fields.responsable,
-              proximo_paso:     decisionRecord.fields.proximoPaso,
-              tipo_cambio:      body.tipo_cambio || '',
-              relevancia:       body.relevancia  || '',
-              aprobado_por:     team,
-              fecha_aprobacion: new Date().toISOString().slice(0, 10),
-              fuente_url:       body.fuente_url || '',
-              sugerencia_hash:  hash,
-            }),
-          });
-          n8nResult = { status: r.status, ok: r.ok };
-          if (r.ok) {
-            // Invalidar cache del panel público para que la novedad aparezca al toque.
-            dataCache = null;
-            cacheTTL = 0;
-          }
-        } catch (err) {
-          console.error('Error llamando a n8n webhook:', err.message);
-          n8nResult = { error: err.message };
+    if (!N8N_WRITE_WEBHOOK_URL || N8N_WRITE_WEBHOOK_URL === 'PENDIENTE') {
+      n8nResult = { warning: 'N8N_WRITE_WEBHOOK_URL no configurada — decisión guardada local pero no se persistió en el Sheet.' };
+    } else if (decision === 'approved' && !decisionRecord.bimestreDestino) {
+      n8nResult = { warning: 'No se especificó bimestreDestino — aprobación guardada local pero no se escribió en ninguna hoja.' };
+    } else {
+      try {
+        const r = await fetch(N8N_WRITE_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            decision,                                    // 'approved' | 'rejected'
+            sugerencia_hash:  hash,
+            equipo:           team,
+            herramienta:      decisionRecord.fields.herramienta,
+            titulo_original:  decisionRecord.fields.titulo_original || '',
+            bimestre:         decisionRecord.bimestreDestino || '',
+            // Campos del cambio (vacíos para rechazos)
+            que_cambio:       decisionRecord.fields.queCambio,
+            nueva_politica:   decisionRecord.fields.nuevaPolitica,
+            deficiencia:      decisionRecord.fields.deficiencia,
+            responsable:      decisionRecord.fields.responsable,
+            proximo_paso:     decisionRecord.fields.proximoPaso,
+            tipo_cambio:      body.tipo_cambio || '',
+            relevancia:       body.relevancia  || '',
+            aprobado_por:     team,
+            fecha:            new Date().toISOString().slice(0, 10),
+            fuente_url:       body.fuente_url || '',
+          }),
+        });
+        n8nResult = { status: r.status, ok: r.ok };
+        if (r.ok) {
+          // Invalidar caches para que cambios aparezcan al toque.
+          dataCache = null;
+          cacheTTL = 0;
+          decisionsRemoteCache = null;
+          decisionsRemoteCacheTTL = 0;
         }
+      } catch (err) {
+        console.error('Error llamando a n8n webhook:', err.message);
+        n8nResult = { error: err.message };
       }
     }
 
