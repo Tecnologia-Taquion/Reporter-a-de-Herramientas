@@ -544,20 +544,26 @@ function openModalAndPreFill(s, autoSubmit) {
 
   const bimOpts = STATE.bimestres.map(b => ({ value: b.sheet, label: b.label }));
   const catalogTools = (STATE.herramientasMiEquipo || []).map(t => ({ value: t, label: t }));
-  // Agregamos la opción "Otra..." al final del dropdown
-  const toolOpts = [
-    ...catalogTools,
-    { value: '__custom__', label: '➕ Otra herramienta…' }
-  ];
 
-  // Si la herramienta de la sugerencia no está en el catálogo, default a "Otra"
-  // con el nombre pre-cargado en el input para que el líder confirme o ajuste.
-  const suggestionTool = (!isManual && s) ? (s.herramienta || '') : '';
-  const isSuggestionToolInCatalog = catalogTools.some(o => o.value === suggestionTool);
+  // Si la sugerencia trae una herramienta que NO está en el catálogo del equipo,
+  // la agregamos como opción extra al inicio del dropdown así el líder puede
+  // aprobarla directamente con el nombre que detectó la IA. Si después la
+  // quiere cambiar elige otra del catálogo o "Otra...".
+  const suggestionTool = (!isManual && s) ? (s.herramienta || '').trim() : '';
+  const isSuggestionToolInCatalog = !!suggestionTool && catalogTools.some(o => o.value === suggestionTool);
+  const toolOpts = [];
+  if (suggestionTool && !isSuggestionToolInCatalog) {
+    toolOpts.push({ value: suggestionTool, label: suggestionTool });
+  }
+  toolOpts.push(...catalogTools);
+  toolOpts.push({ value: '__custom__', label: '➕ Otra herramienta…' });
+
+  // Default = la herramienta de la sugerencia (esté o no en catálogo).
+  // En modo manual = primera del catálogo, o "Otra..." si el catálogo está vacío.
   const initialHerramienta = isManual
-    ? (catalogTools[0] && catalogTools[0].value) || '__custom__'
-    : (isSuggestionToolInCatalog ? suggestionTool : '__custom__');
-  const initialHerramientaCustom = (!isManual && !isSuggestionToolInCatalog) ? suggestionTool : '';
+    ? ((catalogTools[0] && catalogTools[0].value) || '__custom__')
+    : (suggestionTool || (catalogTools[0] && catalogTools[0].value) || '__custom__');
+  const initialHerramientaCustom = '';
 
   const initialTipo  = isManual ? '' : (TIPO_OPTIONS.find(t => t.value === (s.tipo_cambio || '')) ? (s.tipo_cambio || '') : '');
   const initialBim   = defaultBimestre();
