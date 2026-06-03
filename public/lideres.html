@@ -62,7 +62,10 @@
     .actions{display:flex;gap:10px;align-items:center}
     .btn{padding:9px 18px;background:var(--btn-bg);border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.78rem;font-weight:700;color:var(--text);cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
     .btn:hover{border-color:var(--accent);background:var(--btn-hover-bg)}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
     .btn.icon-only{padding:9px 12px;font-size:0.95rem;line-height:1}
+    .btn .spin-icon{display:inline-block;animation:none}
+    .btn.loading .spin-icon{animation:spin 0.7s linear infinite}
     .btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
     .btn.primary:hover{background:var(--text-strong);border-color:var(--text-strong)}
     .btn.green{background:var(--green);color:#fff;border-color:var(--green)}
@@ -191,7 +194,7 @@
         </div>
       </div>
       <div class="actions">
-        <button id="refreshBtn" class="btn">↻ Actualizar</button>
+        <button id="refreshBtn" class="btn"><span class="spin-icon">↻</span><span> Actualizar</span></button>
         <button id="themeBtn" class="btn icon-only" title="Cambiar tema" aria-label="Cambiar tema">🌙</button>
         <a href="/lideres/logout" class="btn">Salir</a>
       </div>
@@ -387,11 +390,14 @@ function renderMias() {
 function renderDecision(d) {
   const isApproved = d.decision === 'approved';
   const fields = d.fields || {};
+  const tool   = fields.herramienta || fields.titulo_original || '(sin nombre)';
+  const subtitle = fields.titulo_original && fields.titulo_original !== tool ? fields.titulo_original : '';
   const date = d.decidedAt ? new Date(d.decidedAt).toLocaleString('es-AR') : '—';
   return `<div class="decision-card ${isApproved ? '' : 'rejected'}">
     <div class="decision-head">
       <div>
-        <div class="decision-tool">${escapeHTML(fields.herramienta || '(sin nombre)')}</div>
+        <div class="decision-tool">${escapeHTML(tool)}</div>
+        ${subtitle ? `<div class="card-title">${escapeHTML(subtitle)}</div>` : ''}
         <div class="decision-meta">${date}${d.bimestreDestino ? ' · ' + escapeHTML(d.bimestreDestino) : ''}</div>
       </div>
       <span class="decision-status ${isApproved ? 'approved' : 'rejected'}">${isApproved ? '✓ Aprobada' : '✕ Descartada'}</span>
@@ -451,6 +457,8 @@ function openModalAndPreFill(s, autoSubmit) {
   document.getElementById('modalSubtitle').textContent = 'Aprobar para ' + STATE.team;
   const body = document.getElementById('modalBody');
   const bimOptions = STATE.bimestres.map(b => `<option value="${escapeHTML(b.sheet)}" ${b.sheet === defaultBimestre() ? 'selected' : ''}>${escapeHTML(b.label)}</option>`).join('');
+  const tipos = ['', 'politica', 'funcionalidad', 'precio', 'deprecacion', 'incidente'];
+  const tipoOptions = tipos.map(t => `<option value="${t}">${t || '— sin clasificar —'}</option>`).join('');
   body.innerHTML = `
     <div class="field">
       <label>Período destino (en qué hoja se carga)</label>
@@ -479,6 +487,10 @@ function openModalAndPreFill(s, autoSubmit) {
     <div class="field">
       <label>Próximo paso</label>
       <textarea id="f-proximoPaso">${escapeHTML(s.proximo_paso || '')}</textarea>
+    </div>
+    <div class="field">
+      <label>Tipo de cambio</label>
+      <select id="f-tipoCambio">${tipoOptions}</select>
     </div>
   `;
   document.getElementById('editModal').classList.add('open');
@@ -510,6 +522,11 @@ async function doApproveFromModal() {
     deficiencia:     document.getElementById('f-deficiencia').value.trim(),
     responsable:     document.getElementById('f-responsable').value.trim(),
     proximoPaso:     document.getElementById('f-proximoPaso').value.trim(),
+    // Metadata heredada de la sugerencia original (no editable, pero útil en el sheet)
+    titulo_original: s.titulo_original || '',
+    tipo_cambio:     document.getElementById('f-tipoCambio') ? document.getElementById('f-tipoCambio').value.trim() : '',
+    relevancia:      (s.relevancia || '').toLowerCase(),
+    fuente_url:      s.fuente_url || '',
   };
   try {
     const r = await fetch('/api/lideres/decision', {
@@ -520,7 +537,13 @@ async function doApproveFromModal() {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Error al guardar');
     closeModal();
-    showToast(data.n8n && data.n8n.ok ? '✓ Aprobada y enviada al Sheet' : data.n8n && data.n8n.warning ? 'Aprobada (no se escribió en el Sheet: ' + data.n8n.warning + ')' : '✓ Aprobada');
+    let msg = '✓ Aprobada y enviada al Sheet';
+    if (data.n8n) {
+      if (data.n8n.warning) msg = 'Aprobada (' + data.n8n.warning + ')';
+      else if (data.n8n.error) msg = 'Aprobada local — Sheet falló: ' + data.n8n.error;
+      else if (data.n8n.ok === false) msg = 'Aprobada local — Sheet respondió error (' + (data.n8n.status || '?') + ')';
+    }
+    showToast(msg, data.n8n && (data.n8n.error || data.n8n.ok === false));
     // Quitar de pendientes en memoria
     STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
     STATE.loaded.mias = false; // forzar recarga la próxima vez
@@ -538,7 +561,12 @@ async function doReject(s) {
     const r = await fetch('/api/lideres/decision', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suggestionHash: s._hash, decision: 'rejected' }),
+      body: JSON.stringify({
+        suggestionHash: s._hash,
+        decision: 'rejected',
+        herramienta: s.herramienta,
+        titulo_original: s.titulo_original,
+      }),
     });
     if (!r.ok) throw new Error('Error al descartar');
     STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
@@ -565,9 +593,21 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 updateThemeIcon();
 
 document.getElementById('refreshBtn').addEventListener('click', async () => {
-  STATE.loaded = { pendientes: false, mias: false };
-  await ensureLoaded(STATE.activeTab);
-  render();
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  try {
+    STATE.loaded = { pendientes: false, mias: false };
+    // Forzamos refresh de ambos tabs en background para que ambos counts queden actualizados.
+    await Promise.all([loadPendientes(), loadMias()]);
+    render();
+    showToast('Actualizado');
+  } catch (err) {
+    showToast(err.message || 'Error al actualizar', true);
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
 });
 
 // Modal handlers

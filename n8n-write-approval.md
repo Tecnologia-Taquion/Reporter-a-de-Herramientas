@@ -1,6 +1,30 @@
-# n8n Workflow: Write Approval to Sheet
+# n8n Workflow: Write Approval to Sheet (v3 — formato plano)
 
-Workflow disparado por el panel de líderes cada vez que un líder aprueba una sugerencia. Recibe los datos (equipo, bimestre destino, campos del cambio) y escribe la fila correspondiente en la hoja mensual del Google Sheet de reportería.
+Workflow disparado por el panel de líderes cuando un líder aprueba una sugerencia. Recibe los datos y los **appendea como una fila nueva** en la hoja del bimestre destino.
+
+> **v3** asume que las hojas mensuales (`JUNIO 26`, `JULIO 26`, …) son **tabulares planas** con 13 columnas, una fila = una novedad. Sin secciones, sin pre-listados.
+
+---
+
+## Estructura de columnas que espera el sheet
+
+Cada hoja mensual debe tener estos headers en la fila 1, en este orden:
+
+```
+A: herramienta
+B: equipo
+C: que_cambio
+D: nueva_politica
+E: deficiencia
+F: responsable
+G: proximo_paso
+H: tipo_cambio
+I: relevancia
+J: aprobado_por
+K: fecha_aprobacion
+L: fuente_url
+M: sugerencia_hash
+```
 
 ---
 
@@ -9,38 +33,29 @@ Workflow disparado por el panel de líderes cada vez que un líder aprueba una s
 ```
 [ Webhook POST ]
        ↓
-  recibe body con:
-  { equipo, bimestre, herramienta,
-    queCambio, nuevaPolitica, deficiencia,
-    responsable, proximoPaso, source }
+[ Validate Body ]      ← chequea campos requeridos
        ↓
-[ Google Sheets: Read sheet ]   ← lee la hoja mensual completa (JUNIO 26, JULIO 26, etc.)
+[ HTTP POST values:append ]   ← appendea fila a la API de Sheets
        ↓
-[ Code: Find Row ]              ← busca la fila correcta del herramienta dentro del equipo
-       ↓
-       ├── encontrada → [ Google Sheets: Update Row ] → [ Respond Webhook ✓ ]
-       └── no encontrada → [ Google Sheets: Append Row ] → [ Respond Webhook ✓ ]
+[ Respond ]            ← 200 si OK, 4xx/5xx si error
 ```
 
-Para encontrar la fila, el código:
-1. Recorre la hoja mensual fila por fila
-2. Detecta el separador de cada equipo (fila con solo el nombre del equipo en la columna C)
-3. Cuando está dentro del equipo correcto, busca la herramienta por nombre (case-insensitive)
-4. Si la encuentra, devuelve el número de fila para hacer un UPDATE
-5. Si no, devuelve `null` y se hace un APPEND al final de la sección de ese equipo
+Mucho más simple que las versiones anteriores. Sin search, sin update, sin lógica de secciones.
 
 ---
 
 ## Requisitos previos
 
-1. **Credenciales de Google Sheets** ya configuradas en n8n (las mismas que usás para el workflow de auto-fetch de changelogs).
-2. **ID real de la planilla** — necesitás abrir la planilla en Google Sheets y copiar el ID de la URL (formato `https://docs.google.com/spreadsheets/d/{ID}/edit`). El publish ID `2PACX-...` que usa el panel para LEER no sirve para ESCRIBIR.
+1. **Credencial "Google Sheets OAuth2 API"** ya configurada en n8n (la misma del workflow de auto-fetch).
+2. **Spreadsheet ID real** (de la URL de Google Sheets entre `/d/` y `/edit`).
+3. **Permisos de edición** del usuario OAuth sobre la planilla.
+4. **Las hojas mensuales tienen los 13 headers en fila 1** (formato nuevo plano).
 
 ---
 
 ## Importar el workflow
 
-Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
+Pegá este JSON y subilo a n8n vía **Import from File**:
 
 ```json
 {
@@ -50,9 +65,8 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
       "parameters": {
         "httpMethod": "POST",
         "path": "write-approval",
-        "options": {
-          "responseMode": "responseNode"
-        }
+        "responseMode": "responseNode",
+        "options": {}
       },
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
@@ -62,7 +76,7 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
     },
     {
       "parameters": {
-        "jsCode": "// Valida el body y arma el contexto para los siguientes nodos.\nconst body = $input.first().json.body || $input.first().json;\n\nconst required = ['equipo', 'bimestre', 'herramienta'];\nfor (const f of required) {\n  if (!body[f]) {\n    throw new Error(`Falta campo requerido: ${f}`);\n  }\n}\n\nreturn [{\n  json: {\n    equipo:        String(body.equipo).trim(),\n    bimestre:      String(body.bimestre).trim(),\n    herramienta:   String(body.herramienta).trim(),\n    queCambio:     String(body.queCambio || '').trim(),\n    nuevaPolitica: String(body.nuevaPolitica || '').trim(),\n    deficiencia:   String(body.deficiencia || '').trim(),\n    responsable:   String(body.responsable || '').trim(),\n    proximoPaso:   String(body.proximoPaso || '').trim(),\n    source:        body.source || {},\n  }\n}];"
+        "jsCode": "// Valida el body y arma el payload de append.\n// IMPORTANTE: reemplazar SPREADSHEET_ID por el ID real de la planilla.\nconst SPREADSHEET_ID = 'REEMPLAZAR_CON_SPREADSHEET_ID';\n\nconst body = $input.first().json.body || $input.first().json;\nconst required = ['bimestre', 'herramienta', 'equipo'];\nfor (const f of required) {\n  if (!body[f]) throw new Error('Falta campo requerido: ' + f);\n}\n\nconst sheetName = String(body.bimestre).trim();\nconst sheetEsc  = sheetName.replace(/'/g, \"''\");\nconst range     = `'${sheetEsc}'!A:M`;\nconst appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;\n\n// Orden EXACTO de columnas en el sheet:\n// herramienta | equipo | que_cambio | nueva_politica | deficiencia | responsable\n// proximo_paso | tipo_cambio | relevancia | aprobado_por | fecha_aprobacion\n// fuente_url | sugerencia_hash\nconst rowValues = [\n  String(body.herramienta      || '').trim(),\n  String(body.equipo           || '').trim(),\n  String(body.que_cambio       || '').trim(),\n  String(body.nueva_politica   || '').trim(),\n  String(body.deficiencia      || '').trim(),\n  String(body.responsable      || '').trim(),\n  String(body.proximo_paso     || '').trim(),\n  String(body.tipo_cambio      || '').trim(),\n  String(body.relevancia       || '').trim(),\n  String(body.aprobado_por     || '').trim(),\n  String(body.fecha_aprobacion || new Date().toISOString().slice(0, 10)).trim(),\n  String(body.fuente_url       || '').trim(),\n  String(body.sugerencia_hash  || '').trim(),\n];\n\nreturn [{\n  json: {\n    appendUrl,\n    sheetName,\n    appendBody: {\n      range,\n      majorDimension: 'ROWS',\n      values: [rowValues],\n    },\n    herramienta: body.herramienta,\n    equipo:      body.equipo,\n    bimestre:    body.bimestre,\n  }\n}];"
       },
       "name": "Validate Body",
       "type": "n8n-nodes-base.code",
@@ -71,23 +85,25 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "REEMPLAZAR_CON_SPREADSHEET_ID",
-          "mode": "id"
+        "method": "POST",
+        "url": "={{ $json.appendUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
         },
-        "sheetName": "={{ $json.bimestre }}",
-        "operation": "read",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.appendBody) }}",
         "options": {
-          "outputFormatting": {
-            "values": {
-              "general": "UNFORMATTED_VALUE"
-            }
-          }
+          "response": { "response": { "neverError": true, "fullResponse": true } }
         }
       },
-      "name": "Read Sheet",
-      "type": "n8n-nodes-base.googleSheets",
+      "name": "Append Row",
+      "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [640, 400],
       "credentials": {
@@ -98,102 +114,25 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
     },
     {
       "parameters": {
-        "jsCode": "// Encuentra la fila correcta del herramienta dentro del equipo.\n// El sheet tiene esta estructura:\n//   fila vacía / fila vacía\n//   (col C) TECNOLOGÍA  ← header del equipo\n//   Herramienta | Qué cambió | Nueva política | Deficiencia | Responsable | Próximo paso\n//   Digital Ocean | ... | ... | ... | ... | ...\n//   Cloudflare    | ... | ... | ... | ... | ...\n//   ...\n//   fila vacía\n//   (col C) INSPIRE     ← siguiente equipo\n//   ...\n\nconst ctx = $('Validate Body').first().json;\nconst rows = $input.all().map(it => it.json);\n\nconst targetTeam = ctx.equipo.toLowerCase().trim();\nconst targetTool = ctx.herramienta.toLowerCase().trim();\n\n// La columna A se llama \"Herramienta\" en el header de cada equipo. Pero el read de n8n\n// suele venir con cada fila como objeto con keys de la primera fila o por índices.\n// Para evitar ambigüedad, leemos las raw rows convirtiendo cada item.json a array por orden.\nfunction rowToArr(r) {\n  if (Array.isArray(r)) return r;\n  return Object.values(r);\n}\n\nlet currentTeam = null;\nlet foundRowIndex = -1;     // 0-based para nuestro tracking\nlet lastRowInSection = -1;  // última fila con contenido en la sección actual del equipo\nlet teamSectionFoundAt = -1;\n\nrows.forEach((r, i) => {\n  const arr = rowToArr(r).map(v => (v == null ? '' : String(v)).trim());\n  // Detectar header de equipo: una sola celda con contenido y es el nombre de un equipo\n  const nonEmpty = arr.map((v, idx) => ({v, idx})).filter(x => x.v);\n  if (nonEmpty.length === 1 && /^[A-ZÁÉÍÓÚÑ\\s\\/\\-&]{3,}$/.test(nonEmpty[0].v)) {\n    currentTeam = nonEmpty[0].v.toLowerCase().trim();\n    if (currentTeam === targetTeam) {\n      teamSectionFoundAt = i;\n    }\n    return;\n  }\n  // Saltea fila de headers de columnas\n  if (arr[0] && arr[0].toLowerCase() === 'herramienta') return;\n\n  if (currentTeam === targetTeam) {\n    if (arr[0]) {\n      lastRowInSection = i;\n      if (arr[0].toLowerCase() === targetTool && foundRowIndex < 0) {\n        foundRowIndex = i;\n      }\n    }\n  }\n});\n\nif (teamSectionFoundAt < 0) {\n  return [{ json: { ...ctx, error: `Equipo \"${ctx.equipo}\" no se encontró en la hoja \"${ctx.bimestre}\".` } }];\n}\n\nconst targetRow = foundRowIndex >= 0 ? (foundRowIndex + 1) : null; // Sheets es 1-indexed\nconst appendAfterRow = lastRowInSection >= 0 ? (lastRowInSection + 1) : null;\n\nreturn [{\n  json: {\n    ...ctx,\n    targetRow,\n    appendAfterRow,\n    action: targetRow ? 'update' : 'append',\n  }\n}];"
+        "jsCode": "// Construye la respuesta para el panel.\nconst ctx  = $('Validate Body').first().json;\nconst resp = $input.first().json;\nconst status = resp.statusCode || 0;\n\nif (status >= 200 && status < 300) {\n  return [{ json: {\n    ok: true,\n    action: 'appended',\n    herramienta: ctx.herramienta,\n    equipo:      ctx.equipo,\n    bimestre:    ctx.bimestre,\n    httpStatus:  200,\n  } }];\n}\n\nreturn [{ json: {\n  ok: false,\n  error: 'Sheets API HTTP ' + status + ' al hacer append en \"' + ctx.sheetName + '\".',\n  detail: resp.body || null,\n  httpStatus: 502,\n} }];"
       },
-      "name": "Find Row",
+      "name": "Build Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [860, 400]
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            { "value1": "={{ $json.action }}", "operation": "equal", "value2": "update" }
-          ]
-        }
-      },
-      "name": "Update or Append?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1080, 400]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "documentId": {
-          "__rl": true,
-          "value": "REEMPLAZAR_CON_SPREADSHEET_ID",
-          "mode": "id"
-        },
-        "sheetName": "={{ $json.bimestre }}",
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "row_number": "={{ $json.targetRow }}",
-            "Herramienta":                      "={{ $json.herramienta }}",
-            "Qué cambió":                       "={{ $json.queCambio }}",
-            "Nueva política / actualización":   "={{ $json.nuevaPolitica }}",
-            "Deficiencia / riesgo detectado":   "={{ $json.deficiencia }}",
-            "Responsable":                      "={{ $json.responsable }}",
-            "Próximo paso":                     "={{ $json.proximoPaso }}"
-          },
-          "matchingColumns": ["row_number"]
-        },
-        "options": {}
-      },
-      "name": "Update Row",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [1300, 300],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "name": "Google Sheets Taquión"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "REEMPLAZAR_CON_SPREADSHEET_ID",
-          "mode": "id"
-        },
-        "sheetName": "={{ $json.bimestre }}",
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Herramienta":                      "={{ $json.herramienta }}",
-            "Qué cambió":                       "={{ $json.queCambio }}",
-            "Nueva política / actualización":   "={{ $json.nuevaPolitica }}",
-            "Deficiencia / riesgo detectado":   "={{ $json.deficiencia }}",
-            "Responsable":                      "={{ $json.responsable }}",
-            "Próximo paso":                     "={{ $json.proximoPaso }}"
-          }
-        },
-        "options": {}
-      },
-      "name": "Append Row",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [1300, 500],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "name": "Google Sheets Taquión"
-        }
-      }
-    },
-    {
-      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: $json.action, row: $json.targetRow || null }) }}",
-        "options": {}
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.httpStatus || 200 }}"
+        }
       },
-      "name": "Respond Success",
+      "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1520, 400]
+      "position": [1080, 400]
     }
   ],
   "connections": {
@@ -201,25 +140,13 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
       "main": [[{ "node": "Validate Body", "type": "main", "index": 0 }]]
     },
     "Validate Body": {
-      "main": [[{ "node": "Read Sheet", "type": "main", "index": 0 }]]
-    },
-    "Read Sheet": {
-      "main": [[{ "node": "Find Row", "type": "main", "index": 0 }]]
-    },
-    "Find Row": {
-      "main": [[{ "node": "Update or Append?", "type": "main", "index": 0 }]]
-    },
-    "Update or Append?": {
-      "main": [
-        [{ "node": "Update Row", "type": "main", "index": 0 }],
-        [{ "node": "Append Row", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Row": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Append Row", "type": "main", "index": 0 }]]
     },
     "Append Row": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Build Response", "type": "main", "index": 0 }]]
+    },
+    "Build Response": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
@@ -233,67 +160,56 @@ Pegá este JSON en un archivo `.json` y subilo en n8n vía **Import from File**:
 
 ## Después de importar
 
-1. **Reemplazar `REEMPLAZAR_CON_SPREADSHEET_ID`** en los 3 nodos de Google Sheets:
-   - Read Sheet
-   - Update Row
-   - Append Row
-   
-   El valor a poner es el ID real de la planilla (el de la URL cuando abrís Google Sheets para editar). Si todavía no lo tenés a mano, abrí la planilla en el browser y copiá lo que va entre `/d/` y `/edit` en la URL.
-
-2. **Mapear credenciales**: si te marca un warning rojo en los nodos de Google Sheets, click en el nodo → seleccioná tu credencial existente de Google Sheets.
-
-3. **Activar el workflow**: switch "Active" arriba a la derecha.
-
-4. **Copiar la URL del webhook**: en el nodo `Webhook`, te aparece "Production URL". Algo tipo:
-   ```
-   https://easy.getboost.bot/webhook/write-approval
-   ```
-   Esa URL es la que tenés que poner en EasyPanel como `N8N_WRITE_WEBHOOK_URL`.
-
-5. **Reiniciar el panel** (EasyPanel → reporteria-herramientas → Implementar) para que tome la env var nueva.
+1. **Reemplazar `SPREADSHEET_ID`** dentro del nodo **Validate Body** (línea `const SPREADSHEET_ID = ...`).
+2. **Mapear credenciales** en el nodo `Append Row` si te marca warning rojo (seleccioná tu credencial existente de Google Sheets).
+3. **Activar** el workflow (switch arriba a la derecha).
+4. **Copiar la Production URL** del nodo Webhook (`https://easy.getboost.bot/webhook/write-approval` aprox).
+5. **Actualizar `N8N_WRITE_WEBHOOK_URL`** en EasyPanel con esa URL.
 
 ---
 
 ## Probar manualmente
 
-Antes de probar con el panel, podés disparar el webhook a mano:
-
 ```bash
 curl -X POST https://easy.getboost.bot/webhook/write-approval \
   -H "Content-Type: application/json" \
   -d '{
-    "equipo": "TECNOLOGÍA",
     "bimestre": "JUNIO 26",
     "herramienta": "Notion",
-    "queCambio": "Notion Developer Platform lanzada",
-    "nuevaPolitica": "Workers para código personalizado disponibles",
+    "equipo": "TECNOLOGÍA",
+    "que_cambio": "Notion Developer Platform",
+    "nueva_politica": "Workers para código personalizado",
     "deficiencia": "",
     "responsable": "Felipe",
-    "proximoPaso": "Evaluar si Workers nos sirve para automatizaciones"
+    "proximo_paso": "Evaluar si nos sirve",
+    "tipo_cambio": "funcionalidad",
+    "relevancia": "alta",
+    "aprobado_por": "TECNOLOGÍA",
+    "fecha_aprobacion": "2026-05-28",
+    "fuente_url": "https://www.notion.so/releases",
+    "sugerencia_hash": "abc123"
   }'
 ```
 
-Si todo funciona, va a actualizar la fila de Notion dentro de la sección TECNOLOGÍA de la hoja JUNIO 26.
-
-Respuesta esperada:
+Esperado:
 ```json
-{ "ok": true, "action": "update", "row": 8 }
+{ "ok": true, "action": "appended", "herramienta": "Notion", ... }
 ```
+
+Vas a ver una fila nueva al final de la hoja JUNIO 26 con esos 13 valores.
 
 ---
 
 ## Troubleshooting
 
-**"Equipo X no se encontró en la hoja Y"**
-- El nombre del equipo en el body no matchea exactamente el header del equipo en el Sheet (incluyendo mayúsculas y acentos).
-- Verificá que en el dropdown del panel de líderes el equipo se llame igual que en el Sheet.
+**HTTP 400** del Sheets API al hacer append
+- Lo más común: el sheet con el nombre del bimestre no existe. Verificá que `JUNIO 26` (o lo que mandes) sea exactamente el nombre de la pestaña.
 
-**"Sheet not found" o error de gid**
-- El nombre del bimestre en el body no coincide con un nombre de hoja en la planilla.
-- Verificá que el panel esté mandando el nombre exacto (ej: `JUNIO 26`, no `Junio 2026`).
+**HTTP 403**
+- La credencial OAuth no tiene scope `spreadsheets` o no tiene permiso de Editor sobre la planilla.
 
-**"Permission denied"**
-- La credencial de Google Sheets no tiene permiso de escritura en la planilla. Compartila como Editor con el usuario asociado a la credencial OAuth.
+**Append no aparece en la hoja**
+- El range `'JUNIO 26'!A:M` debería append al final automáticamente. Si ves filas vacías saltadas, es normal — Sheets busca la primera fila vacía después del último contenido.
 
-**El webhook tarda o devuelve 504**
-- Google Sheets API a veces es lenta. Pode haber rate limits. Esperá 1 min y reintentá.
+**Datos cargados en columnas incorrectas**
+- El orden del array `rowValues` en Validate Body **DEBE** coincidir con el orden de headers en la fila 1 del sheet. Si moviste columnas, ajustá el código.

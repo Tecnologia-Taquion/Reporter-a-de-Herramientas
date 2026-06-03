@@ -149,14 +149,34 @@ async function discoverBimestres() {
   return items;
 }
 
-const COL_MAP = {
-  herramienta:   0,
-  queCambio:     1,
-  nuevaPolitica: 2,
-  deficiencia:   3,
-  responsable:   4,
-  proximoPaso:   5,
-};
+// Estructura tabular plana: cada fila de la hoja mensual es una novedad.
+// Columnas esperadas (case-insensitive, configurables por nombre de header):
+const SHEET_COLUMNS = [
+  'herramienta',
+  'equipo',
+  'que_cambio',
+  'nueva_politica',
+  'deficiencia',
+  'responsable',
+  'proximo_paso',
+  'tipo_cambio',
+  'relevancia',
+  'aprobado_por',
+  'fecha_aprobacion',
+  'fuente_url',
+  'sugerencia_hash',
+];
+
+// Orden fijo de equipos para mostrar en el panel (los que no aparezcan en los datos
+// igual van a renderearse pero sin tools).
+const TEAMS_ORDER = [
+  'TECNOLOGÍA',
+  'INSPIRE',
+  'INSIGHTS',
+  'IGNITE',
+  'GESTIÓN DE CUENTAS',
+  'ADMINISTRACIÓN',
+];
 
 /* ─── Auth ─── */
 function makeToken(pw) {
@@ -372,51 +392,63 @@ function parseCSV(text) {
 }
 
 /* ─── Bimester parser ─── */
+// Parser tabular plano: lee la primera fila como headers (case-insensitive) y mapea
+// las siguientes filas a objetos novedad. Agrupa por columna `equipo`. El orden
+// de los equipos respeta TEAMS_ORDER; los equipos que no estén en TEAMS_ORDER se
+// agregan al final en el orden que aparezcan.
 function parseBimestre(csvText) {
   const rows = parseCSV(csvText);
-  const teams = [];
-  let currentTeam = null;
-  let headerSeen = false;
+  if (rows.length === 0) return [];
 
-  for (const row of rows) {
-    const cells = row.map(c => (c || '').trim());
-    const nonEmpty = cells.filter(Boolean);
-    if (nonEmpty.length === 0) continue;
+  const headers = rows[0].map(h => (h || '').trim().toLowerCase());
+  const colIndex = name => headers.findIndex(h => h === name);
+  const cols = {};
+  for (const c of SHEET_COLUMNS) cols[c] = colIndex(c);
 
-    // Section header: a row where the only non-empty cell is NOT in column 0
-    // (the herramienta column) and looks like a team name (uppercase).
-    // This prevents a tool with an all-uppercase name (e.g. "APOLLO") from
-    // being misread as a team header.
-    if (nonEmpty.length === 1 && !cells[COL_MAP.herramienta]) {
-      const candidate = nonEmpty[0];
-      if (candidate.toLowerCase() !== 'herramienta' && /^[A-ZÁÉÍÓÚÑÜ\s\/\-&]{3,}$/.test(candidate)) {
-        currentTeam = { name: candidate, tools: [] };
-        teams.push(currentTeam);
-        headerSeen = false;
-        continue;
-      }
-    }
-
-    // Column header row
-    if (cells[COL_MAP.herramienta]?.toLowerCase() === 'herramienta') {
-      headerSeen = true;
-      continue;
-    }
-
-    // Data row
-    if (currentTeam && headerSeen) {
-      const herramienta = cells[COL_MAP.herramienta];
-      if (!herramienta) continue;
-      currentTeam.tools.push({
-        herramienta,
-        queCambio:     cells[COL_MAP.queCambio]     || '',
-        nuevaPolitica: cells[COL_MAP.nuevaPolitica] || '',
-        deficiencia:   cells[COL_MAP.deficiencia]   || '',
-        responsable:   cells[COL_MAP.responsable]   || '',
-        proximoPaso:   cells[COL_MAP.proximoPaso]   || '',
-      });
-    }
+  // Si no encuentra ni herramienta ni equipo, el sheet probablemente no tiene
+  // el formato esperado (o está vacío). Devolvemos solo los equipos del orden fijo
+  // con tools vacíos para que el panel los renderee.
+  if (cols.herramienta < 0 || cols.equipo < 0) {
+    return TEAMS_ORDER.map(name => ({ name, tools: [] }));
   }
+
+  const get = (row, key) => cols[key] >= 0 ? ((row[cols[key]] || '').toString().trim()) : '';
+
+  const itemsByTeam = new Map();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const herramienta = get(row, 'herramienta');
+    const equipo      = get(row, 'equipo');
+    if (!herramienta || !equipo) continue;
+
+    if (!itemsByTeam.has(equipo)) itemsByTeam.set(equipo, []);
+    itemsByTeam.get(equipo).push({
+      herramienta,
+      queCambio:        get(row, 'que_cambio'),
+      nuevaPolitica:    get(row, 'nueva_politica'),
+      deficiencia:      get(row, 'deficiencia'),
+      responsable:      get(row, 'responsable'),
+      proximoPaso:      get(row, 'proximo_paso'),
+      tipoCambio:       get(row, 'tipo_cambio'),
+      relevancia:       get(row, 'relevancia'),
+      aprobadoPor:      get(row, 'aprobado_por'),
+      fechaAprobacion:  get(row, 'fecha_aprobacion'),
+      fuenteUrl:        get(row, 'fuente_url'),
+      sugerenciaHash:   get(row, 'sugerencia_hash'),
+    });
+  }
+
+  // Render en el orden fijo + extras al final.
+  const teams = [];
+  const seenTeams = new Set();
+  for (const name of TEAMS_ORDER) {
+    teams.push({ name, tools: itemsByTeam.get(name) || [] });
+    seenTeams.add(name);
+  }
+  for (const [name, tools] of itemsByTeam) {
+    if (!seenTeams.has(name)) teams.push({ name, tools });
+  }
+
   return teams;
 }
 
@@ -588,14 +620,17 @@ app.post('/api/lideres/decision', async (req, res) => {
       suggestionHash: hash,
       decision,
       decidedAt: new Date().toISOString(),
-      fields: decision === 'approved' ? {
-        herramienta:   body.herramienta || '',
-        queCambio:     body.queCambio || '',
-        nuevaPolitica: body.nuevaPolitica || '',
-        deficiencia:   body.deficiencia || '',
-        responsable:   body.responsable || '',
-        proximoPaso:   body.proximoPaso || '',
-      } : null,
+      // Siempre guardamos herramienta + título para poder mostrarlo en "Mis decisiones",
+      // incluso cuando es un rechazo (en cuyo caso los demás fields quedan vacíos).
+      fields: {
+        herramienta:     body.herramienta     || '',
+        titulo_original: body.titulo_original || '',
+        queCambio:       body.queCambio       || '',
+        nuevaPolitica:   body.nuevaPolitica   || '',
+        deficiencia:     body.deficiencia     || '',
+        responsable:     body.responsable     || '',
+        proximoPaso:     body.proximoPaso     || '',
+      },
       bimestreDestino: decision === 'approved' ? (body.bimestreDestino || '') : null,
     };
     data.decisions.push(decisionRecord);
@@ -610,19 +645,25 @@ app.post('/api/lideres/decision', async (req, res) => {
         n8nResult = { warning: 'No se especificó bimestreDestino — decisión guardada pero no se escribió en el Sheet.' };
       } else {
         try {
+          // Payload alineado a las columnas del nuevo sheet plano.
           const r = await fetch(N8N_WRITE_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              equipo:           team,
               bimestre:         decisionRecord.bimestreDestino,
               herramienta:      decisionRecord.fields.herramienta,
-              queCambio:        decisionRecord.fields.queCambio,
-              nuevaPolitica:    decisionRecord.fields.nuevaPolitica,
+              equipo:           team,
+              que_cambio:       decisionRecord.fields.queCambio,
+              nueva_politica:   decisionRecord.fields.nuevaPolitica,
               deficiencia:      decisionRecord.fields.deficiencia,
               responsable:      decisionRecord.fields.responsable,
-              proximoPaso:      decisionRecord.fields.proximoPaso,
-              source: { suggestionHash: hash, decisionId: decisionRecord.id },
+              proximo_paso:     decisionRecord.fields.proximoPaso,
+              tipo_cambio:      body.tipo_cambio || '',
+              relevancia:       body.relevancia  || '',
+              aprobado_por:     team,
+              fecha_aprobacion: new Date().toISOString().slice(0, 10),
+              fuente_url:       body.fuente_url || '',
+              sugerencia_hash:  hash,
             }),
           });
           n8nResult = { status: r.status, ok: r.ok };
