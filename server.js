@@ -645,6 +645,54 @@ async function fetchDecisionsFromSheet() {
   return decisions;
 }
 
+// Cache del catálogo de herramientas leído del sheet HERRAMIENTAS.
+let herramientasCache = null;
+let herramientasCacheTTL = 0;
+const HERRAMIENTAS_TTL_MS = 5 * 60 * 1000;
+
+// Lee la hoja HERRAMIENTAS y devuelve { equipo: [tool1, tool2, ...] }.
+// Si la hoja no existe o está vacía, devuelve el fallback hardcoded TEAMS_TOOLS.
+async function fetchHerramientasCatalog() {
+  const now = Date.now();
+  if (herramientasCache && now < herramientasCacheTTL) return herramientasCache;
+
+  let catalog = null;
+  try {
+    const gid = await findSheetGid('HERRAMIENTAS');
+    if (gid) {
+      const csv = await fetchSheetByGid(gid);
+      const rows = parseCSV(csv);
+      if (rows.length > 1) {
+        const headers = rows[0].map(h => (h || '').trim().toLowerCase());
+        const eqIdx = headers.findIndex(h => h === 'equipo');
+        const toolIdx = headers.findIndex(h => h === 'herramienta');
+        if (eqIdx >= 0 && toolIdx >= 0) {
+          const built = {};
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const equipo = (row[eqIdx] || '').toString().trim();
+            const tool   = (row[toolIdx] || '').toString().trim();
+            if (!equipo || !tool) continue;
+            if (!built[equipo]) built[equipo] = [];
+            if (!built[equipo].includes(tool)) built[equipo].push(tool);
+          }
+          if (Object.keys(built).length > 0) catalog = built;
+        } else {
+          console.warn('HERRAMIENTAS sheet: faltan headers "equipo" y/o "herramienta"');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error leyendo HERRAMIENTAS sheet:', err.message);
+  }
+
+  // Fallback al hardcoded si el sheet no devolvió nada.
+  if (!catalog) catalog = TEAMS_TOOLS;
+  herramientasCache = catalog;
+  herramientasCacheTTL = now + HERRAMIENTAS_TTL_MS;
+  return catalog;
+}
+
 // Fetcha y parsea la hoja SUGERENCIAS (la del workflow de auto-fetch de n8n).
 // La hoja tiene columnas: fecha_deteccion | herramienta | fuente_url | titulo_original
 // | resumen | proximo_paso | relevancia | estado | bimestre_destino
@@ -719,7 +767,8 @@ app.get('/api/lideres/sugerencias', async (req, res) => {
 
     const pendientes = sugerencias.filter(s => !decidedHashes.has(s._hash));
     const bimestres = (await discoverBimestres()).map(b => ({ sheet: b.sheet, label: b.label, sortKey: b.sortKey }));
-    const herramientasMiEquipo = TEAMS_TOOLS[team] || [];
+    const catalog = await fetchHerramientasCatalog();
+    const herramientasMiEquipo = catalog[team] || [];
     res.json({ team, pendientes, bimestres, herramientasMiEquipo });
   } catch (err) {
     console.error('Error /api/lideres/sugerencias:', err);

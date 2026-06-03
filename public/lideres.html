@@ -542,12 +542,23 @@ function openModalAndPreFill(s, autoSubmit) {
   document.getElementById('modalTitle').textContent = isManual ? 'Agregar novedad manual' : s.herramienta;
   document.getElementById('modalSubtitle').textContent = isManual ? 'Nueva novedad · ' + STATE.team : 'Aprobar para ' + STATE.team;
 
-  const bimOpts  = STATE.bimestres.map(b => ({ value: b.sheet, label: b.label }));
-  const toolOpts = (STATE.herramientasMiEquipo || []).map(t => ({ value: t, label: t }));
+  const bimOpts = STATE.bimestres.map(b => ({ value: b.sheet, label: b.label }));
+  const catalogTools = (STATE.herramientasMiEquipo || []).map(t => ({ value: t, label: t }));
+  // Agregamos la opción "Otra..." al final del dropdown
+  const toolOpts = [
+    ...catalogTools,
+    { value: '__custom__', label: '➕ Otra herramienta…' }
+  ];
 
+  // Si la herramienta de la sugerencia no está en el catálogo, default a "Otra"
+  // con el nombre pre-cargado en el input para que el líder confirme o ajuste.
+  const suggestionTool = (!isManual && s) ? (s.herramienta || '') : '';
+  const isSuggestionToolInCatalog = catalogTools.some(o => o.value === suggestionTool);
   const initialHerramienta = isManual
-    ? ''
-    : (toolOpts.find(o => o.value === s.herramienta) ? s.herramienta : (toolOpts[0] && toolOpts[0].value) || '');
+    ? (catalogTools[0] && catalogTools[0].value) || '__custom__'
+    : (isSuggestionToolInCatalog ? suggestionTool : '__custom__');
+  const initialHerramientaCustom = (!isManual && !isSuggestionToolInCatalog) ? suggestionTool : '';
+
   const initialTipo  = isManual ? '' : (TIPO_OPTIONS.find(t => t.value === (s.tipo_cambio || '')) ? (s.tipo_cambio || '') : '');
   const initialBim   = defaultBimestre();
 
@@ -559,9 +570,11 @@ function openModalAndPreFill(s, autoSubmit) {
     </div>
     <div class="field">
       <label>Herramienta</label>
-      ${toolOpts.length
-        ? buildDropdownHTML('herramienta', initialHerramienta, 'Elegí una herramienta', toolOpts)
-        : `<input type="text" id="f-herramienta" value="${escapeHTML(initialHerramienta)}" placeholder="(tu equipo no tiene herramientas configuradas)"/>`}
+      ${buildDropdownHTML('herramienta', initialHerramienta, 'Elegí una herramienta', toolOpts)}
+    </div>
+    <div class="field" id="f-herramienta-custom-wrap" style="display:${initialHerramienta === '__custom__' ? 'flex' : 'none'};flex-direction:column;gap:5px">
+      <label>Nombre de la nueva herramienta</label>
+      <input type="text" id="f-herramienta-custom" value="${escapeHTML(initialHerramientaCustom)}" placeholder="Ej: Linear, Sentry, Mixpanel…"/>
     </div>
     <div class="field">
       <label>Qué cambió</label>
@@ -589,7 +602,15 @@ function openModalAndPreFill(s, autoSubmit) {
     </div>
   `;
   wireDropdown('bimestre');
-  if (toolOpts.length) wireDropdown('herramienta');
+  wireDropdown('herramienta', val => {
+    const wrap = document.getElementById('f-herramienta-custom-wrap');
+    if (!wrap) return;
+    wrap.style.display = val === '__custom__' ? 'flex' : 'none';
+    if (val === '__custom__') {
+      const inp = document.getElementById('f-herramienta-custom');
+      if (inp) setTimeout(() => inp.focus(), 50);
+    }
+  });
   wireDropdown('tipoCambio');
 
   document.getElementById('modalApprove').textContent = isManual ? '✓ Agregar novedad' : '✓ Aprobar y enviar al Sheet';
@@ -618,7 +639,17 @@ async function doApproveFromModal() {
     ? 'manual-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
     : s._hash;
 
-  const herramienta = (document.getElementById('f-herramienta').value || '').trim();
+  let herramienta = (document.getElementById('f-herramienta').value || '').trim();
+  if (herramienta === '__custom__') {
+    const customInp = document.getElementById('f-herramienta-custom');
+    herramienta = customInp ? customInp.value.trim() : '';
+    if (!herramienta) {
+      showToast('Escribí el nombre de la nueva herramienta', true);
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      return;
+    }
+  }
   if (!herramienta) {
     showToast('Elegí una herramienta antes de aprobar', true);
     btn.disabled = false;
