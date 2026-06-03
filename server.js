@@ -178,6 +178,17 @@ const TEAMS_ORDER = [
   'ADMINISTRACIÓN',
 ];
 
+// Catálogo de herramientas por equipo. El líder al aprobar elige una de éstas
+// (dropdown en el panel) para mantener consistencia entre bimestres.
+const TEAMS_TOOLS = {
+  'TECNOLOGÍA':         ['Digital Ocean', 'Cloudflare', 'Easypanel', 'Github', 'n8n', 'Notion', 'Unify / Ubiquiti'],
+  'INSPIRE':            ['Adobe', 'CapCut', 'Figma', 'Gamma App', 'OpusClip', 'Mirage Captions', 'ElevenLabs', 'Dropbox', 'Vercel'],
+  'INSIGHTS':           ['Typeform', 'SurveyMonkey', 'Digimind / Onclusive', 'Power BI', 'Claude', 'ChatGPT'],
+  'IGNITE':             ['Donweb', 'ChatGPT', 'APOLLO', 'hostinger', 'windsor'],
+  'GESTIÓN DE CUENTAS': ['ChatGPT', 'Claude'],
+  'ADMINISTRACIÓN':     ['Microsoft', 'Colppy', 'Claude / Anthropic API', 'Loom', 'Netlify', 'ChatGPT', 'Workspace'],
+};
+
 /* ─── Auth ─── */
 function makeToken(pw) {
   return crypto.createHash('sha256').update(pw + COOKIE_SECRET).digest('hex');
@@ -294,7 +305,8 @@ app.get('/lideres/login', (req, res) => {
   }
   const error = req.query.error;
   const teams = Object.keys(LEADERS_PASSWORDS);
-  const options = teams.map(t => `<option value="${t}">${t}</option>`).join('');
+  const optionsHTML = teams.map(t => `<div class="dropdown-option" data-value="${t.replace(/"/g, '&quot;')}">${t}</div>`).join('');
+  const firstTeam = teams[0] || '';
   res.send(`<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -311,11 +323,23 @@ app.get('/lideres/login', (req, res) => {
     h1{font-size:1.2rem;font-weight:800;color:#374151;margin-bottom:6px}
     .sub{font-size:0.8rem;color:#9CA3AF;font-weight:600;margin-bottom:28px}
     label{display:block;text-align:left;font-size:0.7rem;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;margin-top:14px}
-    select,input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;background:#FDFCF0;transition:border-color .2s;appearance:none}
-    select{background-image:linear-gradient(45deg,transparent 50%,#6B7280 50%),linear-gradient(135deg,#6B7280 50%,transparent 50%);background-position:calc(100% - 22px) 50%,calc(100% - 17px) 50%;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer}
-    select:focus,input[type=password]:focus{border-color:#C4B5FD}
-    button{width:100%;padding:12px;background:#374151;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s;margin-top:22px}
-    button:hover{background:#1F2937}
+    input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;background:#FDFCF0;transition:border-color .2s}
+    input[type=password]:focus{border-color:#C4B5FD}
+
+    .dropdown{position:relative;width:100%;text-align:left}
+    .dropdown-trigger{width:100%;padding:12px 40px 12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;background:#FDFCF0;outline:none;cursor:pointer;text-align:left;display:flex;align-items:center;position:relative;transition:border-color .2s}
+    .dropdown-trigger:hover, .dropdown.open .dropdown-trigger{border-color:#C4B5FD}
+    .dropdown-trigger::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;border-right:1.8px solid #6B7280;border-bottom:1.8px solid #6B7280;transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+    .dropdown.open .dropdown-trigger::after{transform:translateY(-30%) rotate(-135deg)}
+    .dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid #E5E7EB;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.08);padding:6px;z-index:50;display:none;max-height:260px;overflow-y:auto}
+    .dropdown.open .dropdown-panel{display:block}
+    .dropdown-option{padding:9px 14px;border-radius:10px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:#374151;cursor:pointer;transition:background .15s}
+    .dropdown-option:hover{background:#F9FAFB}
+    .dropdown-option.selected{background:#374151;color:#fff;font-weight:700}
+    .dropdown-option.selected:hover{background:#374151}
+
+    button.primary{width:100%;padding:12px;background:#374151;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s;margin-top:22px}
+    button.primary:hover{background:#1F2937}
     .error{margin-top:14px;color:#DC2626;font-size:0.76rem;font-weight:700;background:#FEF2F2;padding:8px 16px;border-radius:50px;display:inline-block}
     .footer-link{margin-top:24px;font-size:0.74rem;color:#9CA3AF;font-weight:600}
     .footer-link a{color:#7C3AED;text-decoration:none}
@@ -327,15 +351,48 @@ app.get('/lideres/login', (req, res) => {
     <h1>Acceso Líderes</h1>
     <p class="sub">Ingresá con la contraseña de tu equipo</p>
     <form method="POST" action="/lideres/login">
-      <label for="team">Equipo</label>
-      <select name="team" id="team" required>${options}</select>
+      <label>Equipo</label>
+      <div class="dropdown" id="teamDropdown">
+        <input type="hidden" name="team" id="teamInput" value="${firstTeam.replace(/"/g, '&quot;')}"/>
+        <button type="button" class="dropdown-trigger" id="teamTrigger">${firstTeam || 'Elegí tu equipo'}</button>
+        <div class="dropdown-panel">${optionsHTML}</div>
+      </div>
       <label for="password">Contraseña</label>
       <input type="password" name="password" id="password" placeholder="•••••••••" autocomplete="current-password" required/>
-      <button type="submit">Ingresar →</button>
+      <button type="submit" class="primary">Ingresar →</button>
     </form>
     ${error ? '<p class="error">Equipo o contraseña incorrectos</p>' : ''}
     <p class="footer-link">¿Sos admin? <a href="/login">Acceder al panel principal</a></p>
   </div>
+<script>
+  (function(){
+    const root = document.getElementById('teamDropdown');
+    const trigger = document.getElementById('teamTrigger');
+    const input = document.getElementById('teamInput');
+    // Marca la opción inicial como selected
+    const initial = input.value;
+    root.querySelectorAll('.dropdown-option').forEach(o => {
+      if (o.dataset.value === initial) o.classList.add('selected');
+    });
+    trigger.addEventListener('click', function(e){
+      e.stopPropagation();
+      root.classList.toggle('open');
+    });
+    root.querySelectorAll('.dropdown-option').forEach(opt => {
+      opt.addEventListener('click', function(e){
+        e.stopPropagation();
+        input.value = opt.dataset.value;
+        trigger.textContent = opt.textContent;
+        root.querySelectorAll('.dropdown-option.selected').forEach(o => o.classList.remove('selected'));
+        opt.classList.add('selected');
+        root.classList.remove('open');
+      });
+    });
+    document.addEventListener('click', function(){
+      root.classList.remove('open');
+    });
+  })();
+</script>
 </body>
 </html>`);
 });
@@ -572,7 +629,8 @@ app.get('/api/lideres/sugerencias', async (req, res) => {
     );
     const pendientes = sugerencias.filter(s => !decidedHashes.has(s._hash));
     const bimestres = (await discoverBimestres()).map(b => ({ sheet: b.sheet, label: b.label, sortKey: b.sortKey }));
-    res.json({ team, pendientes, bimestres });
+    const herramientasMiEquipo = TEAMS_TOOLS[team] || [];
+    res.json({ team, pendientes, bimestres, herramientasMiEquipo });
   } catch (err) {
     console.error('Error /api/lideres/sugerencias:', err);
     res.status(500).json({ error: err.message });

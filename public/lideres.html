@@ -155,10 +155,28 @@
     .modal-body{padding:18px 28px 24px;display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto}
     .field{display:flex;flex-direction:column;gap:5px}
     .field label{font-size:0.7rem;font-weight:800;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em}
-    .field input, .field select, .field textarea{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:14px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;resize:vertical;min-height:38px}
-    .field select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer;padding-right:36px}
+    .field input, .field textarea{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:14px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;resize:vertical;min-height:38px}
     .field textarea{min-height:70px;border-radius:18px}
-    .field input:focus, .field select:focus, .field textarea:focus{border-color:var(--accent)}
+    .field input:focus, .field textarea:focus{border-color:var(--accent)}
+
+    /* Custom dropdown (reemplaza select nativo) */
+    .dropdown{position:relative;width:100%}
+    .dropdown-trigger{width:100%;padding:10px 36px 10px 14px;border:1.5px solid var(--border);border-radius:14px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;cursor:pointer;text-align:left;display:flex;align-items:center;position:relative;transition:border-color .2s;min-height:38px}
+    .dropdown-trigger:hover, .dropdown.open .dropdown-trigger{border-color:var(--accent)}
+    .dropdown-trigger.placeholder{color:var(--text-subtle)}
+    .dropdown-trigger::after{content:"";position:absolute;right:16px;top:50%;width:7px;height:7px;border-right:1.8px solid var(--text-muted);border-bottom:1.8px solid var(--text-muted);transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+    .dropdown.open .dropdown-trigger::after{transform:translateY(-30%) rotate(-135deg)}
+    .dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1.5px solid var(--border);border-radius:14px;box-shadow:var(--shadow-card);padding:6px;z-index:120;display:none;max-height:260px;overflow-y:auto}
+    .dropdown.open .dropdown-panel{display:block}
+    .dropdown-option{padding:8px 14px;border-radius:10px;font-family:'Nunito',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text);cursor:pointer;transition:background .15s;line-height:1.4}
+    .dropdown-option:hover{background:var(--btn-hover-bg)}
+    .dropdown-option.selected{background:var(--btn-primary-bg);color:var(--btn-primary-text);font-weight:700}
+    .dropdown-option.selected:hover{background:var(--btn-primary-bg)}
+    .dropdown-option.placeholder{color:var(--text-subtle);font-style:italic}
+
+    /* Header inline dropdown (variante más chica para search/filtros) */
+    .controls .dropdown .dropdown-trigger{border-radius:50px;padding:9px 36px 9px 16px;font-size:0.82rem;font-weight:700;min-height:0}
+    .controls .dropdown .dropdown-panel{border-radius:14px}
     .modal-footer{padding:16px 28px 22px;border-top:1px solid var(--border-soft);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 
     /* Toast */
@@ -267,6 +285,7 @@ async function loadPendientes() {
   STATE.team = data.team;
   STATE.pendientes = data.pendientes || [];
   STATE.bimestres = (data.bimestres || []).sort((a, b) => a.sortKey - b.sortKey);
+  STATE.herramientasMiEquipo = data.herramientasMiEquipo || [];
   STATE.loaded.pendientes = true;
 }
 
@@ -328,6 +347,7 @@ function renderPendientes() {
   const controlsHTML = `
     <div class="controls">
       <div class="search"><input type="text" id="searchInput" placeholder="Buscar herramienta o texto…" value="${escapeHTML(STATE.search)}"/></div>
+      <button id="manualBtn" class="btn primary">+ Agregar manualmente</button>
     </div>`;
 
   let body;
@@ -431,6 +451,10 @@ function wireEvents() {
       if (ni) { ni.focus(); ni.setSelectionRange(pos, pos); }
     });
   }
+  const manualBtn = document.getElementById('manualBtn');
+  if (manualBtn) {
+    manualBtn.addEventListener('click', () => openModalAndPreFill(null, false));
+  }
   document.querySelectorAll('[data-action]').forEach(el => {
     el.addEventListener('click', e => {
       const action = el.dataset.action;
@@ -445,36 +469,107 @@ function wireEvents() {
 }
 
 function defaultBimestre() {
-  // Por defecto: el bimestre/mes activo más reciente con sortKey <= ahora.
-  // Si la lista está ordenada cronológicamente, devolvemos el último.
+  // Por defecto: el bimestre/mes "actual o más cercano en el futuro" basado en hoy.
+  // Si hoy es mayo, default = junio (el próximo período donde caería una novedad).
   if (STATE.bimestres.length === 0) return '';
-  return STATE.bimestres[STATE.bimestres.length - 1].sheet;
+  const today = new Date();
+  const todayKey = today.getFullYear() * 100 + (today.getMonth() + 1);
+  const future = STATE.bimestres.find(b => b.sortKey >= todayKey);
+  return future ? future.sheet : STATE.bimestres[STATE.bimestres.length - 1].sheet;
 }
 
+// Helper: arma el HTML de un dropdown custom + un hidden input que guarda el valor.
+function buildDropdownHTML(idPrefix, selectedValue, placeholder, options) {
+  // options: [{ value, label }]
+  const sel = options.find(o => o.value === selectedValue);
+  const displayLabel = sel ? sel.label : (placeholder || '— elegí —');
+  const isPlaceholder = !sel;
+  const optsHTML = options.map(o =>
+    `<div class="dropdown-option ${o.value === selectedValue ? 'selected' : ''}" data-value="${escapeHTML(o.value)}">${escapeHTML(o.label)}</div>`
+  ).join('');
+  return `<div class="dropdown" id="dd-${idPrefix}">
+    <input type="hidden" id="f-${idPrefix}" value="${escapeHTML(selectedValue || '')}"/>
+    <button type="button" class="dropdown-trigger ${isPlaceholder ? 'placeholder' : ''}" id="trg-${idPrefix}">${escapeHTML(displayLabel)}</button>
+    <div class="dropdown-panel">${optsHTML}</div>
+  </div>`;
+}
+
+function wireDropdown(idPrefix, onChange) {
+  const root = document.getElementById('dd-' + idPrefix);
+  if (!root) return;
+  const trigger = document.getElementById('trg-' + idPrefix);
+  const input   = document.getElementById('f-' + idPrefix);
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = root.classList.contains('open');
+    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) root.classList.add('open');
+  });
+  root.querySelectorAll('.dropdown-option').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      const val = opt.dataset.value;
+      input.value = val;
+      trigger.textContent = opt.textContent;
+      trigger.classList.remove('placeholder');
+      root.querySelectorAll('.dropdown-option.selected').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      root.classList.remove('open');
+      if (typeof onChange === 'function') onChange(val);
+    });
+  });
+}
+
+// Cierra dropdowns al click afuera
+document.addEventListener('click', () => {
+  document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+});
+
+const TIPO_OPTIONS = [
+  { value: '',              label: '— sin clasificar —' },
+  { value: 'politica',      label: 'política' },
+  { value: 'funcionalidad', label: 'funcionalidad' },
+  { value: 'precio',        label: 'precio' },
+  { value: 'deprecacion',   label: 'deprecación' },
+  { value: 'incidente',     label: 'incidente' },
+];
+
 function openModalAndPreFill(s, autoSubmit) {
+  // s puede ser null → modo "agregar manualmente"
+  const isManual = !s;
   MODAL.suggestion = s;
-  document.getElementById('modalTitle').textContent = s.herramienta;
-  document.getElementById('modalSubtitle').textContent = 'Aprobar para ' + STATE.team;
+  MODAL.isManual = isManual;
+  document.getElementById('modalTitle').textContent = isManual ? 'Agregar novedad manual' : s.herramienta;
+  document.getElementById('modalSubtitle').textContent = isManual ? 'Nueva novedad · ' + STATE.team : 'Aprobar para ' + STATE.team;
+
+  const bimOpts  = STATE.bimestres.map(b => ({ value: b.sheet, label: b.label }));
+  const toolOpts = (STATE.herramientasMiEquipo || []).map(t => ({ value: t, label: t }));
+
+  const initialHerramienta = isManual
+    ? ''
+    : (toolOpts.find(o => o.value === s.herramienta) ? s.herramienta : (toolOpts[0] && toolOpts[0].value) || '');
+  const initialTipo  = isManual ? '' : (TIPO_OPTIONS.find(t => t.value === (s.tipo_cambio || '')) ? (s.tipo_cambio || '') : '');
+  const initialBim   = defaultBimestre();
+
   const body = document.getElementById('modalBody');
-  const bimOptions = STATE.bimestres.map(b => `<option value="${escapeHTML(b.sheet)}" ${b.sheet === defaultBimestre() ? 'selected' : ''}>${escapeHTML(b.label)}</option>`).join('');
-  const tipos = ['', 'politica', 'funcionalidad', 'precio', 'deprecacion', 'incidente'];
-  const tipoOptions = tipos.map(t => `<option value="${t}">${t || '— sin clasificar —'}</option>`).join('');
   body.innerHTML = `
     <div class="field">
       <label>Período destino (en qué hoja se carga)</label>
-      <select id="f-bimestre">${bimOptions}</select>
+      ${buildDropdownHTML('bimestre', initialBim, 'Elegí un período', bimOpts)}
     </div>
     <div class="field">
       <label>Herramienta</label>
-      <input type="text" id="f-herramienta" value="${escapeHTML(s.herramienta)}"/>
+      ${toolOpts.length
+        ? buildDropdownHTML('herramienta', initialHerramienta, 'Elegí una herramienta', toolOpts)
+        : `<input type="text" id="f-herramienta" value="${escapeHTML(initialHerramienta)}" placeholder="(tu equipo no tiene herramientas configuradas)"/>`}
     </div>
     <div class="field">
       <label>Qué cambió</label>
-      <textarea id="f-queCambio">${escapeHTML(s.titulo_original || '')}</textarea>
+      <textarea id="f-queCambio">${escapeHTML(isManual ? '' : (s.titulo_original || ''))}</textarea>
     </div>
     <div class="field">
       <label>Nueva política / actualización</label>
-      <textarea id="f-nuevaPolitica">${escapeHTML(s.resumen || '')}</textarea>
+      <textarea id="f-nuevaPolitica">${escapeHTML(isManual ? '' : (s.resumen || ''))}</textarea>
     </div>
     <div class="field">
       <label>Deficiencia / riesgo detectado</label>
@@ -486,17 +581,20 @@ function openModalAndPreFill(s, autoSubmit) {
     </div>
     <div class="field">
       <label>Próximo paso</label>
-      <textarea id="f-proximoPaso">${escapeHTML(s.proximo_paso || '')}</textarea>
+      <textarea id="f-proximoPaso">${escapeHTML(isManual ? '' : (s.proximo_paso || ''))}</textarea>
     </div>
     <div class="field">
       <label>Tipo de cambio</label>
-      <select id="f-tipoCambio">${tipoOptions}</select>
+      ${buildDropdownHTML('tipoCambio', initialTipo, 'Elegí tipo', TIPO_OPTIONS)}
     </div>
   `;
+  wireDropdown('bimestre');
+  if (toolOpts.length) wireDropdown('herramienta');
+  wireDropdown('tipoCambio');
+
+  document.getElementById('modalApprove').textContent = isManual ? '✓ Agregar novedad' : '✓ Aprobar y enviar al Sheet';
   document.getElementById('editModal').classList.add('open');
-  if (autoSubmit) {
-    // En modo "aprobar tal cual" disparamos directo, pero igual abrimos el modal
-    // por si el líder quiere ajustar el bimestre destino.
+  if (autoSubmit && !isManual) {
     document.getElementById('modalApprove').focus();
   }
 }
@@ -504,29 +602,52 @@ function openModalAndPreFill(s, autoSubmit) {
 function closeModal() {
   document.getElementById('editModal').classList.remove('open');
   MODAL.suggestion = null;
+  MODAL.isManual = false;
 }
 
 async function doApproveFromModal() {
   const s = MODAL.suggestion;
-  if (!s) return;
+  const isManual = MODAL.isManual;
   const btn = document.getElementById('modalApprove');
+  const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Enviando…';
+
+  // Para una novedad manual generamos un hash único client-side.
+  const hash = isManual
+    ? 'manual-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+    : s._hash;
+
+  const herramienta = (document.getElementById('f-herramienta').value || '').trim();
+  if (!herramienta) {
+    showToast('Elegí una herramienta antes de aprobar', true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+  const bimestre = (document.getElementById('f-bimestre').value || '').trim();
+  if (!bimestre) {
+    showToast('Elegí un período destino', true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+
   const body = {
-    suggestionHash: s._hash,
+    suggestionHash: hash,
     decision: 'approved',
-    bimestreDestino: document.getElementById('f-bimestre').value,
-    herramienta:     document.getElementById('f-herramienta').value.trim(),
+    bimestreDestino: bimestre,
+    herramienta,
     queCambio:       document.getElementById('f-queCambio').value.trim(),
     nuevaPolitica:   document.getElementById('f-nuevaPolitica').value.trim(),
     deficiencia:     document.getElementById('f-deficiencia').value.trim(),
     responsable:     document.getElementById('f-responsable').value.trim(),
     proximoPaso:     document.getElementById('f-proximoPaso').value.trim(),
-    // Metadata heredada de la sugerencia original (no editable, pero útil en el sheet)
-    titulo_original: s.titulo_original || '',
-    tipo_cambio:     document.getElementById('f-tipoCambio') ? document.getElementById('f-tipoCambio').value.trim() : '',
-    relevancia:      (s.relevancia || '').toLowerCase(),
-    fuente_url:      s.fuente_url || '',
+    titulo_original: isManual ? '' : (s.titulo_original || ''),
+    tipo_cambio:     (document.getElementById('f-tipoCambio') && document.getElementById('f-tipoCambio').value || '').trim(),
+    relevancia:      isManual ? '' : ((s.relevancia || '').toLowerCase()),
+    fuente_url:      isManual ? '' : (s.fuente_url || ''),
+    manual:          isManual,
   };
   try {
     const r = await fetch('/api/lideres/decision', {
@@ -537,22 +658,24 @@ async function doApproveFromModal() {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Error al guardar');
     closeModal();
-    let msg = '✓ Aprobada y enviada al Sheet';
+    let msg = isManual ? '✓ Novedad agregada al Sheet' : '✓ Aprobada y enviada al Sheet';
     if (data.n8n) {
-      if (data.n8n.warning) msg = 'Aprobada (' + data.n8n.warning + ')';
-      else if (data.n8n.error) msg = 'Aprobada local — Sheet falló: ' + data.n8n.error;
-      else if (data.n8n.ok === false) msg = 'Aprobada local — Sheet respondió error (' + (data.n8n.status || '?') + ')';
+      if (data.n8n.warning) msg = (isManual ? 'Guardada' : 'Aprobada') + ' (' + data.n8n.warning + ')';
+      else if (data.n8n.error) msg = (isManual ? 'Guardada' : 'Aprobada') + ' local — Sheet falló: ' + data.n8n.error;
+      else if (data.n8n.ok === false) msg = (isManual ? 'Guardada' : 'Aprobada') + ' local — Sheet respondió error (' + (data.n8n.status || '?') + ')';
     }
     showToast(msg, data.n8n && (data.n8n.error || data.n8n.ok === false));
-    // Quitar de pendientes en memoria
-    STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
+    // Si era de la lista de pendientes, sacarla
+    if (!isManual && s) {
+      STATE.pendientes = STATE.pendientes.filter(x => x._hash !== s._hash);
+    }
     STATE.loaded.mias = false; // forzar recarga la próxima vez
     render();
   } catch (err) {
     showToast(err.message || 'Error', true);
   } finally {
     btn.disabled = false;
-    btn.textContent = '✓ Aprobar y enviar al Sheet';
+    btn.textContent = originalLabel;
   }
 }
 
