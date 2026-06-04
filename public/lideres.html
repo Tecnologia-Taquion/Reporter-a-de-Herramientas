@@ -165,7 +165,7 @@
     @keyframes spin{to{transform:rotate(360deg)}}
 
     /* Modal */
-    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:32px 20px;overflow-y:auto;backdrop-filter:blur(2px)}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,0.55);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:32px 20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
     .modal-backdrop.open{display:flex}
     .modal-card{background:var(--surface);border-radius:20px;max-width:680px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;margin:auto}
     .modal-header{padding:22px 28px 16px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -579,10 +579,11 @@ function openModalAndPreFill(s, autoSubmit) {
   toolOpts.push(...catalogTools);
   toolOpts.push({ value: '__custom__', label: '➕ Otra herramienta…' });
 
-  // Default = la herramienta de la sugerencia (esté o no en catálogo).
-  // En modo manual = primera del catálogo, o "Otra..." si el catálogo está vacío.
+  // Default:
+  // - Sugerencia → la herramienta que detectó la IA (esté o no en catálogo).
+  // - Manual → vacío (el líder elige conscientemente). El trigger muestra el placeholder.
   const initialHerramienta = isManual
-    ? ((catalogTools[0] && catalogTools[0].value) || '__custom__')
+    ? ''
     : (suggestionTool || (catalogTools[0] && catalogTools[0].value) || '__custom__');
   const initialHerramientaCustom = '';
 
@@ -691,16 +692,44 @@ async function doApproveFromModal() {
     return;
   }
 
+  const queCambio     = document.getElementById('f-queCambio').value.trim();
+  const nuevaPolitica = document.getElementById('f-nuevaPolitica').value.trim();
+  const deficiencia   = document.getElementById('f-deficiencia').value.trim();
+  const proximoPaso   = document.getElementById('f-proximoPaso').value.trim();
+  // Validación: al menos uno de los campos descriptivos tiene que estar lleno,
+  // sino la novedad queda vacía y no aporta nada al panel público.
+  if (!queCambio && !nuevaPolitica && !deficiencia && !proximoPaso) {
+    showToast('Completá al menos uno: Qué cambió, Nueva política, Deficiencia o Próximo paso', true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+  // Si pusieron deficiencia, recomendamos próximo paso. No es bloqueante pero avisamos.
+  if (deficiencia && !proximoPaso) {
+    if (!confirm('Cargaste una deficiencia/riesgo pero no un próximo paso. ¿Querés continuar igual?')) {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      return;
+    }
+  }
+  const responsable = document.getElementById('f-responsable').value.trim();
+  if (!responsable) {
+    showToast('Indicá un responsable', true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+
   const body = {
     suggestionHash: hash,
     decision: 'approved',
     bimestreDestino: bimestre,
     herramienta,
-    queCambio:       document.getElementById('f-queCambio').value.trim(),
-    nuevaPolitica:   document.getElementById('f-nuevaPolitica').value.trim(),
-    deficiencia:     document.getElementById('f-deficiencia').value.trim(),
-    responsable:     document.getElementById('f-responsable').value.trim(),
-    proximoPaso:     document.getElementById('f-proximoPaso').value.trim(),
+    queCambio,
+    nuevaPolitica,
+    deficiencia,
+    responsable,
+    proximoPaso,
     titulo_original: isManual ? '' : (s.titulo_original || ''),
     tipo_cambio:     (document.getElementById('f-tipoCambio') && document.getElementById('f-tipoCambio').value || '').trim(),
     relevancia:      isManual ? '' : ((s.relevancia || '').toLowerCase()),

@@ -203,7 +203,7 @@
     .risk-tool.clickable:hover{text-decoration:underline}
 
     /* History modal */
-    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;backdrop-filter:blur(2px)}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,0.55);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;-webkit-overflow-scrolling:touch}
     .modal-backdrop.open{display:flex}
     .modal-card{background:var(--surface);border-radius:20px;max-width:820px;width:100%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25)}
     .modal-header{padding:22px 28px 16px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -464,9 +464,9 @@ function render() {
         <button data-view="risks" class="${viewMode === 'risks' ? 'active' : ''}">Riesgos</button>
       </div>
       <div class="search"><input type="text" id="searchInput" placeholder="Buscar herramienta..." value="${escapeHTML(searchTerm)}"/></div>
-      ${renderDropdown('teamDropdown', teamFilter, 'Todos los equipos', teamOptions)}
-      ${renderDropdown('respDropdown', responsableFilter, 'Todos los responsables', respOptions)}
-      ${renderDropdown('tagDropdown', tagFilter ? (TAG_DEFS.find(t => t.id === tagFilter)?.label || '') : '', 'Todos los tipos', TAG_DEFS.map(t => t.label), TAG_DEFS.map(t => t.id))}
+      ${renderDropdown('teamDropdown', teamFilter, 'Todos los equipos', teamOptions, null, 'Equipo')}
+      ${renderDropdown('respDropdown', responsableFilter, 'Todos los responsables', respOptions, null, 'Responsable')}
+      ${renderDropdown('tagDropdown', tagFilter ? (TAG_DEFS.find(t => t.id === tagFilter)?.label || '') : '', 'Todos los tipos', TAG_DEFS.map(t => t.label), TAG_DEFS.map(t => t.id), 'Tipo')}
       ${viewMode === 'teams' ? `<button id="onlyNewsBtn" class="btn toggle ${onlyNews ? 'active' : ''}">Solo novedades</button>` : ''}
       <button id="exportBtn" class="btn">↓ Exportar</button>
     </div>`;
@@ -498,10 +498,13 @@ function render() {
   document.getElementById('footerInfo').textContent = `Datos actualizados: ${fetched}`;
 }
 
-function renderDropdown(id, selectedLabel, placeholder, optionLabels, optionValues) {
+function renderDropdown(id, selectedLabel, placeholder, optionLabels, optionValues, shortTriggerLabel) {
   // optionValues is optional — defaults to optionLabels (when label == value)
+  // shortTriggerLabel is optional — si se pasa, se usa como label del trigger cuando
+  // no hay selección (más compacto que el placeholder largo). El placeholder largo
+  // sigue apareciendo como primera opción al abrir el panel.
   const values = optionValues || optionLabels;
-  const selected = selectedLabel || placeholder;
+  const selected = selectedLabel || shortTriggerLabel || placeholder;
   const optionsHTML = [
     `<div class="dropdown-option ${selectedLabel === '' ? 'selected' : ''}" data-value="">${escapeHTML(placeholder)}</div>`,
     ...optionLabels.map((label, i) => {
