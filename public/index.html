@@ -101,7 +101,7 @@
     .tab .filled-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--dot-filled);margin-left:6px;vertical-align:middle}
 
     /* Summary bar */
-    .summary{background:var(--surface);border-radius:16px;padding:16px 22px;margin-bottom:24px;display:flex;gap:28px;flex-wrap:wrap;box-shadow:var(--shadow-soft)}
+    .summary{background:var(--surface);border-radius:16px;padding:16px 22px;margin-bottom:24px;display:flex;gap:48px;flex-wrap:wrap;box-shadow:var(--shadow-soft);justify-content:center}
     .summary-item{display:flex;flex-direction:column;gap:2px}
     .summary-label{font-size:0.7rem;font-weight:700;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.04em}
     .summary-value{font-size:1.05rem;font-weight:800;color:var(--text)}
@@ -143,7 +143,9 @@
 
     /* Controls bar */
     .controls{background:var(--surface);border-radius:16px;padding:14px 18px;margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;box-shadow:var(--shadow-soft)}
-    .controls .search{flex:1 1 220px;min-width:180px;position:relative}
+    .controls .search{flex:0 1 220px;min-width:140px;max-width:240px;position:relative}
+    .controls .dropdown-trigger{max-width:200px}
+    .controls #exportBtn{margin-left:auto}
     .controls .search input{width:100%;padding:9px 16px 9px 36px;border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s}
     .controls .search input:focus{border-color:var(--accent)}
     .controls .search::before{content:"🔍";position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:0.8rem;opacity:.6;pointer-events:none}
