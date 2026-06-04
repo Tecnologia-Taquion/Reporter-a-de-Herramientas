@@ -7,63 +7,78 @@
   <title>Reportería de Herramientas</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
+    /* Design system: Minimalism & Swiss Style + Remote Work palette (ui-ux-pro-max).
+       Indigo #6366F1 primary, neutros grises, Emerald para acciones positivas. */
     :root{
-      --bg:#FDFCF0;
+      --bg:#FAFAFA;
       --surface:#ffffff;
-      --surface-alt:#FAFAFA;
-      --surface-highlight:#FFFEFB;
+      --surface-alt:#F9FAFB;
+      --surface-highlight:#F5F3FF;
       --text:#374151;
-      --text-strong:#1F2937;
+      --text-strong:#111827;
       --text-muted:#6B7280;
       --text-subtle:#9CA3AF;
       --text-empty:#D1D5DB;
       --border:#E5E7EB;
       --border-soft:#F3F4F6;
-      --accent:#C4B5FD;
+      --accent:#6366F1;
+      --accent-hover:#4F46E5;
+      --accent-soft:#EEF2FF;
       --dot-empty:#D1D5DB;
       --dot-filled:#10B981;
-      --badge-bg:#ffffff;
+      --badge-bg:#F3F4F6;
       --badge-news-bg:#D1FAE5;
       --badge-news-text:#065F46;
-      --header-gradient:linear-gradient(135deg,#E3F2FD,#F3E5F5);
-      --icon-gradient:linear-gradient(135deg,#E3F2FD,#F3E5F5);
-      --shadow-card:0 2px 12px rgba(0,0,0,0.05);
-      --shadow-soft:0 2px 8px rgba(0,0,0,0.04);
+      --header-gradient:linear-gradient(135deg,#EEF2FF 0%,#F5F3FF 100%);
+      --icon-gradient:linear-gradient(135deg,#EEF2FF,#F5F3FF);
+      --shadow-card:0 1px 3px rgba(15,23,42,0.06),0 1px 2px rgba(15,23,42,0.04);
+      --shadow-soft:0 1px 2px rgba(15,23,42,0.04);
+      --shadow-md:0 4px 12px rgba(15,23,42,0.08);
       --btn-bg:#ffffff;
-      --btn-hover-bg:#FAFAFA;
-      --btn-primary-bg:#374151;
+      --btn-hover-bg:#F9FAFB;
+      --btn-primary-bg:#6366F1;
       --btn-primary-text:#ffffff;
+      --btn-primary-hover:#4F46E5;
     }
     html[data-theme="dark"]{
       --bg:#0F172A;
       --surface:#1E293B;
       --surface-alt:#162032;
-      --surface-highlight:#243047;
+      --surface-highlight:#1E1B4B;
       --text:#E5E7EB;
       --text-strong:#F9FAFB;
-      --text-muted:#9CA3AF;
-      --text-subtle:#6B7280;
-      --text-empty:#4B5563;
+      --text-muted:#94A3B8;
+      --text-subtle:#64748B;
+      --text-empty:#475569;
       --border:#334155;
       --border-soft:#243047;
-      --accent:#8B5CF6;
-      --dot-empty:#4B5563;
+      --accent:#818CF8;
+      --accent-hover:#A5B4FC;
+      --accent-soft:#1E1B4B;
+      --dot-empty:#475569;
       --dot-filled:#10B981;
-      --badge-bg:#243047;
+      --badge-bg:#1E293B;
       --badge-news-bg:#064E3B;
       --badge-news-text:#A7F3D0;
-      --header-gradient:linear-gradient(135deg,#1E3A8A33,#6B21A833);
-      --icon-gradient:linear-gradient(135deg,#1E3A8A66,#6B21A866);
-      --shadow-card:0 2px 12px rgba(0,0,0,0.35);
-      --shadow-soft:0 2px 8px rgba(0,0,0,0.25);
+      --header-gradient:linear-gradient(135deg,#1E1B4B 0%,#312E81 100%);
+      --icon-gradient:linear-gradient(135deg,#1E1B4B66,#6B21A866);
+      --shadow-card:0 1px 3px rgba(0,0,0,0.4),0 1px 2px rgba(0,0,0,0.2);
+      --shadow-soft:0 1px 2px rgba(0,0,0,0.2);
+      --shadow-md:0 4px 12px rgba(0,0,0,0.45);
       --btn-bg:#1E293B;
       --btn-hover-bg:#243047;
-      --btn-primary-bg:#8B5CF6;
+      --btn-primary-bg:#6366F1;
       --btn-primary-text:#ffffff;
+      --btn-primary-hover:#818CF8;
     }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:32px 24px 64px;transition:background .2s,color .2s}
+    body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:32px 24px 64px;transition:background .2s,color .2s;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
     .container{max-width:1200px;margin:0 auto}
+
+    /* Focus rings consistentes (a11y) */
+    :focus{outline:none}
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .dropdown-trigger:focus-visible, .dropdown-option:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+    .tab:focus-visible{outline-offset:3px}
 
     /* Header */
     .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;gap:16px;flex-wrap:wrap}
@@ -74,7 +89,7 @@
     .btn{padding:9px 18px;background:var(--btn-bg);border:1.5px solid var(--border);border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.78rem;font-weight:700;color:var(--text);cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
     .btn:hover{border-color:var(--accent);background:var(--btn-hover-bg)}
     .btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
-    .btn.primary:hover{background:var(--text-strong);border-color:var(--text-strong)}
+    .btn.primary:hover{background:var(--btn-primary-hover);border-color:var(--btn-primary-hover)}
     .btn.icon-only{padding:9px 12px;font-size:0.95rem;line-height:1}
 
     /* Tabs */

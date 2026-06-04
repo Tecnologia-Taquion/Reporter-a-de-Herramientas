@@ -255,15 +255,16 @@ app.get('/login', (req, res) => {
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Nunito',sans-serif;background:#FDFCF0;display:flex;align-items:center;justify-content:center;min-height:100vh}
-    .card{background:#fff;border-radius:24px;padding:44px 36px;width:380px;max-width:92vw;box-shadow:0 8px 30px rgba(0,0,0,0.08);text-align:center}
-    .icon{width:56px;height:56px;background:linear-gradient(135deg,#E3F2FD,#F3E5F5);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 16px}
-    h1{font-size:1.2rem;font-weight:800;color:#374151;margin-bottom:6px}
+    body{font-family:'Nunito',sans-serif;background:#FAFAFA;display:flex;align-items:center;justify-content:center;min-height:100vh;-webkit-font-smoothing:antialiased}
+    .card{background:#fff;border-radius:24px;padding:44px 36px;width:380px;max-width:92vw;box-shadow:0 1px 3px rgba(15,23,42,0.06),0 4px 20px rgba(15,23,42,0.06);text-align:center}
+    .icon{width:56px;height:56px;background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 16px}
+    h1{font-size:1.2rem;font-weight:800;color:#111827;margin-bottom:6px}
     .sub{font-size:0.8rem;color:#9CA3AF;font-weight:600;margin-bottom:28px}
-    input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;margin-bottom:12px;background:#FDFCF0;transition:border-color .2s}
-    input[type=password]:focus{border-color:#C4B5FD}
-    button{width:100%;padding:12px;background:#374151;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s}
-    button:hover{background:#1F2937}
+    input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;margin-bottom:12px;background:#FAFAFA;transition:border-color .2s}
+    input[type=password]:focus{border-color:#6366F1;background:#fff}
+    button{width:100%;padding:12px;background:#6366F1;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s}
+    button:hover{background:#4F46E5}
+    button:focus-visible{outline:2px solid #6366F1;outline-offset:3px}
     .error{margin-top:14px;color:#DC2626;font-size:0.76rem;font-weight:700;background:#FEF2F2;padding:8px 16px;border-radius:50px;display:inline-block}
   </style>
 </head>
@@ -317,32 +318,34 @@ app.get('/lideres/login', (req, res) => {
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Nunito',sans-serif;background:#FDFCF0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-    .card{background:#fff;border-radius:24px;padding:44px 36px;width:420px;max-width:92vw;box-shadow:0 8px 30px rgba(0,0,0,0.08);text-align:center}
-    .icon{width:56px;height:56px;background:linear-gradient(135deg,#E3F2FD,#F3E5F5);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 16px}
-    h1{font-size:1.2rem;font-weight:800;color:#374151;margin-bottom:6px}
+    body{font-family:'Nunito',sans-serif;background:#FAFAFA;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+    .card{background:#fff;border-radius:24px;padding:44px 36px;width:420px;max-width:92vw;box-shadow:0 1px 3px rgba(15,23,42,0.06),0 4px 20px rgba(15,23,42,0.06);text-align:center}
+    .icon{width:56px;height:56px;background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 16px}
+    h1{font-size:1.2rem;font-weight:800;color:#111827;margin-bottom:6px}
     .sub{font-size:0.8rem;color:#9CA3AF;font-weight:600;margin-bottom:28px}
     label{display:block;text-align:left;font-size:0.7rem;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;margin-top:14px}
-    input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;background:#FDFCF0;transition:border-color .2s}
-    input[type=password]:focus{border-color:#C4B5FD}
+    input[type=password]{width:100%;padding:12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;outline:none;background:#FAFAFA;transition:border-color .2s}
+    input[type=password]:focus{border-color:#6366F1;background:#fff}
 
     .dropdown{position:relative;width:100%;text-align:left}
-    .dropdown-trigger{width:100%;padding:12px 40px 12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;background:#FDFCF0;outline:none;cursor:pointer;text-align:left;display:flex;align-items:center;position:relative;transition:border-color .2s}
-    .dropdown-trigger:hover, .dropdown.open .dropdown-trigger{border-color:#C4B5FD}
+    .dropdown-trigger{width:100%;padding:12px 40px 12px 18px;border:1.5px solid #E5E7EB;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:600;color:#374151;background:#FAFAFA;outline:none;cursor:pointer;text-align:left;display:flex;align-items:center;position:relative;transition:border-color .2s}
+    .dropdown-trigger:hover, .dropdown.open .dropdown-trigger{border-color:#6366F1;background:#fff}
     .dropdown-trigger::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;border-right:1.8px solid #6B7280;border-bottom:1.8px solid #6B7280;transform:translateY(-70%) rotate(45deg);transition:transform .2s}
     .dropdown.open .dropdown-trigger::after{transform:translateY(-30%) rotate(-135deg)}
-    .dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid #E5E7EB;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.08);padding:6px;z-index:50;display:none;max-height:260px;overflow-y:auto}
+    .dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid #E5E7EB;border-radius:14px;box-shadow:0 4px 20px rgba(15,23,42,0.08);padding:6px;z-index:50;display:none;max-height:260px;overflow-y:auto}
     .dropdown.open .dropdown-panel{display:block}
     .dropdown-option{padding:9px 14px;border-radius:10px;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:600;color:#374151;cursor:pointer;transition:background .15s}
-    .dropdown-option:hover{background:#F9FAFB}
-    .dropdown-option.selected{background:#374151;color:#fff;font-weight:700}
-    .dropdown-option.selected:hover{background:#374151}
+    .dropdown-option:hover{background:#F5F3FF}
+    .dropdown-option.selected{background:#6366F1;color:#fff;font-weight:700}
+    .dropdown-option.selected:hover{background:#6366F1}
 
-    button.primary{width:100%;padding:12px;background:#374151;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s;margin-top:22px}
-    button.primary:hover{background:#1F2937}
+    button.primary{width:100%;padding:12px;background:#6366F1;color:#fff;border:none;border-radius:50px;font-family:'Nunito',sans-serif;font-size:0.88rem;font-weight:800;cursor:pointer;transition:background .2s;margin-top:22px}
+    button.primary:hover{background:#4F46E5}
+    button.primary:focus-visible{outline:2px solid #6366F1;outline-offset:3px}
     .error{margin-top:14px;color:#DC2626;font-size:0.76rem;font-weight:700;background:#FEF2F2;padding:8px 16px;border-radius:50px;display:inline-block}
     .footer-link{margin-top:24px;font-size:0.74rem;color:#9CA3AF;font-weight:600}
-    .footer-link a{color:#7C3AED;text-decoration:none}
+    .footer-link a{color:#6366F1;text-decoration:none;font-weight:700}
+    .footer-link a:hover{text-decoration:underline}
   </style>
 </head>
 <body>
