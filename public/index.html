@@ -618,10 +618,13 @@ function openHistoryModal(toolName) {
   }).join('');
   document.getElementById('historyBody').innerHTML = itemsHTML;
   document.getElementById('historyModal').classList.add('open');
+  // Scroll lock: evita que el fondo se mueva cuando el modal está abierto
+  document.body.style.overflow = 'hidden';
 }
 
 function closeHistoryModal() {
   document.getElementById('historyModal').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 document.getElementById('historyClose').addEventListener('click', closeHistoryModal);

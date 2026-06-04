@@ -643,6 +643,8 @@ function openModalAndPreFill(s, autoSubmit) {
 
   document.getElementById('modalApprove').textContent = isManual ? '✓ Agregar novedad' : '✓ Aprobar y enviar al Sheet';
   document.getElementById('editModal').classList.add('open');
+  // Scroll lock: evita que el fondo se mueva mientras el modal está abierto
+  document.body.style.overflow = 'hidden';
   if (autoSubmit && !isManual) {
     document.getElementById('modalApprove').focus();
   }
@@ -650,6 +652,7 @@ function openModalAndPreFill(s, autoSubmit) {
 
 function closeModal() {
   document.getElementById('editModal').classList.remove('open');
+  document.body.style.overflow = '';
   MODAL.suggestion = null;
   MODAL.isManual = false;
 }
